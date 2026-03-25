@@ -9,7 +9,9 @@ import {
   onSnapshot,
   initializeFirestore,
   persistentLocalCache,
-  persistentMultipleTabManager
+  persistentMultipleTabManager,
+  getDocs,
+  query
 } from "firebase/firestore"; 
 import { 
   getAuth, 
@@ -35,7 +37,7 @@ const firebaseConfig = typeof window !== 'undefined' && window.__firebase_config
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
-// 🛡️ MOBILE FIX: Enable persistent cache so the phone stores the menu locally
+// 🛡️ MOBILE FIX: Enable persistent cache with aggressive synchronization
 const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
@@ -50,6 +52,7 @@ export default function App() {
   const [dbError, setDbError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [showRetry, setShowRetry] = useState(false);
   const pendingIdRef = useRef(null);
 
   // App State - Loaded from local backup instantly
@@ -85,6 +88,14 @@ export default function App() {
     }
   }, [cart, menuItems]);
 
+  // Timer to show retry button if it takes too long
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!isDataLoaded && menuItems.length === 0) setShowRetry(true);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [isDataLoaded, menuItems]);
+
   // 1. AUTHENTICATION
   useEffect(() => {
     const initAuth = async () => {
@@ -96,6 +107,7 @@ export default function App() {
           await signInAnonymously(auth);
         }
       } catch (err) {
+        console.error("Auth error:", err);
         setAuthStatus("Offline Mode");
       }
     };
@@ -116,13 +128,28 @@ export default function App() {
 
     const menuRef = collection(db, 'artifacts', APP_ID_PERMANENT, 'public', 'data', 'menu');
     
+    // Explicitly try a one-time fetch to "kickstart" the mobile connection
+    const kickstart = async () => {
+      try {
+        const snap = await getDocs(query(menuRef));
+        if (!snap.empty) {
+          const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          setMenuItems(items);
+          setIsDataLoaded(true);
+        }
+      } catch (e) {
+        console.log("Kickstart failed, relying on snapshot...");
+      }
+    };
+    kickstart();
+
     const unsubMenu = onSnapshot(menuRef, { includeMetadataChanges: true }, (snap) => {
       const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       
-      // Only update if we actually got data (prevents flickering on slow phone networks)
-      if (items.length > 0 || snap.metadata.fromCache === false) {
+      if (items.length > 0) {
         setMenuItems(items);
         setIsDataLoaded(true);
+        setShowRetry(false);
       }
       
       setDbError(null);
@@ -132,7 +159,8 @@ export default function App() {
       }
     }, (err) => {
       console.error("Firestore Error:", err);
-      if (menuItems.length === 0) setDbError("Network Error: Try refreshing");
+      // Don't show error if we have backup items on screen
+      if (menuItems.length === 0) setDbError("Network issue. Reconnecting...");
     });
 
     const settingsRef = doc(db, 'artifacts', APP_ID_PERMANENT, 'public', 'data', 'settings', 'global');
@@ -144,12 +172,12 @@ export default function App() {
   }, [user]);
 
   const safeWrite = async (action) => {
-    if (!user) return setDbError("Reconnecting... Please wait.");
+    if (!user) return setDbError("Login lost. Refreshing...");
     setIsSaving(true);
     try {
       await action();
     } catch (e) {
-      setDbError("Sync failed. Check connection.");
+      setDbError("Save failed. Try again.");
       setIsSaving(false);
     }
   };
@@ -258,7 +286,17 @@ export default function App() {
 
           <main className="max-w-6xl mx-auto px-6">
             {menuItems.length === 0 && !isDataLoaded ? (
-              <div className="text-center py-20 font-black uppercase text-[10px] tracking-widest opacity-20 animate-pulse">Warming the Grill...</div>
+              <div className="text-center py-20 flex flex-col items-center">
+                <div className="font-black uppercase text-[10px] tracking-widest opacity-20 animate-pulse mb-4">Warming the Grill...</div>
+                {showRetry && (
+                  <button 
+                    onClick={() => window.location.reload()} 
+                    className="px-6 py-3 bg-black text-white rounded-full text-[10px] font-black uppercase tracking-widest animate-in fade-in zoom-in"
+                  >
+                    Force Refresh
+                  </button>
+                )}
+              </div>
             ) : (
               Object.entries(groupedMenu).map(([cat, items]) => (
                 <section key={cat} className="mb-20">
