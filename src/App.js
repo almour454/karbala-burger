@@ -8,8 +8,7 @@ import {
   updateDoc,
   setDoc, 
   deleteDoc,
-  enableIndexedDbPersistence,
-  query
+  enableIndexedDbPersistence
 } from "firebase/firestore";
 import { 
   getAuth, 
@@ -19,7 +18,7 @@ import {
 } from "firebase/auth";
 
 /**
- * 🛠️ CONFIGURATION - Locked in for Al Karbala
+ * 🛠️ CONFIGURATION
  */
 const localConfig = {
   apiKey: "AIzaSyBi9O20ep4sQEfAQSvQAexHzzT1wjj8cHc",
@@ -39,23 +38,28 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// SPEED BOOST: Persistence is key for Iraq's mobile networks
+// SPEED BOOST: Enable Offline Persistence
+// This makes items load INSTANTLY if the user has visited before.
 try {
-  enableIndexedDbPersistence(db).catch(() => {});
+  enableIndexedDbPersistence(db).catch(() => {
+    // Silently fail if multiple tabs are open
+  });
 } catch (e) {}
 
 const appId = typeof window !== 'undefined' && window.__app_id 
   ? window.__app_id 
   : 'karbala-burger-pro-v1';
 
+const getMenuRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'menu');
+const getSettingsRef = () => doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
+
 const OWNER_PASSWORD = "KarbalaGrill2024"; 
 
 export default function App() {
   const [view, setView] = useState("customer"); 
   const [user, setUser] = useState(null);
-  const [dataLoaded, setDataLoaded] = useState(false);
   
-  // ⚡ INSTANT LOAD: Load from cache immediately so UI isn't empty
+  // SPEED FIX: Initialize with data from LocalStorage if available for 0ms loading
   const [menuItems, setMenuItems] = useState(() => {
     const saved = localStorage.getItem('kb_menu_cache');
     return saved ? JSON.parse(saved) : [];
@@ -66,119 +70,111 @@ export default function App() {
     return saved ? JSON.parse(saved) : ["Burgers", "Drinks", "Mandi"];
   });
 
-  const [settings, setSettings] = useState(() => {
-    const saved = localStorage.getItem('kb_settings_cache');
-    return saved ? JSON.parse(saved) : {
-      restaurantName: "AL KARBALA BURGER",
-      tagline: "Best Grill in the City",
-      primaryColor: "#ea580c", 
-      whatsapp: "964780000000",
-      openingHours: "12:00 PM - 12:00 AM",
-      locationDesc: "Karbala, City Center"
-    };
-  });
-
   const [cart, setCart] = useState({});
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [address, setAddress] = useState("");
+  
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [passInput, setPassInput] = useState("");
   const [showError, setShowError] = useState(false);
+
+  const [settings, setSettings] = useState({
+    restaurantName: "AL KARBALA BURGER",
+    tagline: "Best Grill in the City",
+    primaryColor: "#ea580c", 
+    whatsapp: "964780000000",
+    openingHours: "12:00 PM - 12:00 AM",
+    locationDesc: "Karbala, City Center"
+  });
+
   const [newItem, setNewItem] = useState({ name: "", price: "", salePrice: "", desc: "", image: "", category: "Burgers" });
   const [newCatInput, setNewCatInput] = useState("");
   const audioContext = useRef(null);
 
-  // 🛡️ AUTHENTICATION FLOW (The fix for the 30s delay)
+  const playNotificationSound = () => {
+    try {
+      if (!audioContext.current) audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = audioContext.current;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, ctx.currentTime); 
+      osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1); 
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+    } catch (e) {}
+  };
+
   useEffect(() => {
-    let isMounted = true;
-
-    const startAuth = async () => {
-      const token = typeof window !== 'undefined' ? window.__initial_auth_token : null;
-      try {
-        if (token) {
-          await signInWithCustomToken(auth, token);
-        } else {
-          // Retry logic for unstable connections
-          let attempts = 0;
-          while (attempts < 3) {
-            try {
-              await signInAnonymously(auth);
-              break; 
-            } catch (err) {
-              attempts++;
-              await new Promise(r => setTimeout(r, 1000));
-            }
-          }
-        }
-      } catch (e) {
-        if (isMounted) setUser({ uid: 'offline-user' });
-      }
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace("#", "");
+      if (hash === "admin") setView("owner");
+      else setView("customer");
     };
-
-    startAuth();
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      if (isMounted) setUser(u);
-    });
-
-    return () => { isMounted = false; unsubscribe(); };
+    window.addEventListener("hashchange", handleHashChange);
+    handleHashChange();
+    return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  // 📊 DATA SUBSCRIPTION FLOW (Wait for user badge first)
+  const navigateTo = (newView) => {
+    window.location.hash = newView === "owner" ? "admin" : "";
+    setView(newView);
+  };
+
   useEffect(() => {
-    if (!user) return; // DON'T ask the database until the bouncer sees the badge
+    const initAuth = async () => {
+      const token = typeof window !== 'undefined' ? window.__initial_auth_token : null;
+      try {
+        if (token) await signInWithCustomToken(auth, token);
+        else await signInAnonymously(auth);
+      } catch (e) {
+        setUser({ uid: 'guest-' + Math.random().toString(36).substr(2, 9) });
+      }
+    };
+    initAuth();
+    onAuthStateChanged(auth, (u) => u && setUser(u));
 
-    const menuRef = collection(db, 'artifacts', appId, 'public', 'data', 'menu');
-    const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
-
-    // Sync Menu
-    const unsubMenu = onSnapshot(menuRef, (snap) => {
+    // Listen to Menu - Faster connection
+    const unsubMenu = onSnapshot(getMenuRef(), { includeMetadataChanges: true }, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setMenuItems(data);
       setDataLoaded(true);
+      // Update cache
       localStorage.setItem('kb_menu_cache', JSON.stringify(data));
-    }, (err) => {
-      console.error("Menu sync error:", err);
-      setDataLoaded(true);
-    });
+    }, (error) => setDataLoaded(true));
 
-    // Sync Settings
-    const unsubSettings = onSnapshot(settingsRef, (snap) => {
+    // Listen to Settings - Faster connection
+    const unsubSettings = onSnapshot(getSettingsRef(), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        setSettings(prev => {
-          const updated = { ...prev, ...data };
-          localStorage.setItem('kb_settings_cache', JSON.stringify(updated));
-          return updated;
-        });
         if (Array.isArray(data.categories)) {
-          setCategories(data.categories);
-          localStorage.setItem('kb_cat_cache', JSON.stringify(data.categories));
+           setCategories(data.categories);
+           localStorage.setItem('kb_cat_cache', JSON.stringify(data.categories));
         }
+        setSettings(prev => ({ ...prev, ...data }));
       }
     });
 
     return () => { unsubMenu(); unsubSettings(); };
-  }, [user]);
-
-  // View management via URL Hash
-  useEffect(() => {
-    const handleHash = () => setView(window.location.hash === "#admin" ? "owner" : "customer");
-    window.addEventListener("hashchange", handleHash);
-    handleHash();
-    return () => window.removeEventListener("hashchange", handleHash);
   }, []);
 
-  const navigateTo = (v) => {
-    window.location.hash = v === "owner" ? "admin" : "";
+  const handleAuthSubmit = (e) => {
+    e.preventDefault();
+    if (passInput === OWNER_PASSWORD) { setIsUnlocked(true); setShowError(false); } 
+    else { setShowError(true); setPassInput(""); }
   };
 
   const updateSettings = async (field, value) => {
-    if (!user) return;
-    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { [field]: value }, { merge: true });
+    await setDoc(getSettingsRef(), { [field]: value }, { merge: true });
   };
 
   const addNewItem = async () => {
-    if (!newItem.name || !newItem.price || !user) return;
+    if (!newItem.name || !newItem.price) return;
     const id = "item_" + Date.now();
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id), {
       ...newItem,
@@ -189,27 +185,25 @@ export default function App() {
     setNewItem({ name: "", price: "", salePrice: "", desc: "", image: "", category: newItem.category });
   };
 
-  const deleteItem = async (id) => {
-    if (!user) return;
-    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id));
-  };
-
-  const updateCloudItem = async (id, field, value) => {
-    if (!user) return;
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id), { [field]: value });
-  };
-
   const addCategory = async () => {
-    if (!newCatInput.trim() || !user) return;
+    if (!newCatInput.trim()) return;
     const updated = [...new Set([...categories, newCatInput.trim()])];
     await updateSettings("categories", updated);
     setNewCatInput("");
   };
 
-  const deleteCategory = async (cat) => {
-    if (!user) return;
-    const updated = categories.filter(c => c !== cat);
+  const deleteCategory = async (catToDelete) => {
+    const updated = categories.filter(c => c !== catToDelete);
     await updateSettings("categories", updated);
+  };
+
+  const deleteItem = async (id) => {
+    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id));
+  };
+
+  const updateCloudItem = async (id, field, value) => {
+    const itemRef = doc(db, 'artifacts', appId, 'public', 'data', 'menu', id);
+    try { await updateDoc(itemRef, { [field]: value }); } catch (e) {}
   };
 
   const addToCart = (item) => setCart(p => ({ ...p, [item.id]: (p[item.id] || 0) + 1 }));
@@ -230,7 +224,10 @@ export default function App() {
     return acc;
   }, {}), [categories, menuItems]);
 
+  const discountedItems = useMemo(() => menuItems.filter(item => item.salePrice && item.salePrice < item.price), [menuItems]);
+
   const handleCheckout = () => {
+    playNotificationSound();
     const items = Object.entries(cart).map(([id, q]) => `${q}x ${menuItems.find(m=>m.id===id)?.name}`).join('\n');
     const waUrl = `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(`🔥 ${settings.restaurantName} ORDER 🔥\n\n${items}\n\n💰 TOTAL: ${cartTotal.toLocaleString()} IQD\n📍 ADDR: ${address}`)}`;
     window.open(waUrl);
@@ -239,126 +236,223 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans selection:bg-orange-100 antialiased transition-opacity duration-700">
       
-      {/* GLOBAL NAVIGATION */}
-      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[1000] flex bg-black/95 backdrop-blur-2xl p-2 rounded-full border border-white/10 shadow-2xl scale-90 md:scale-100 transition-all">
-        <button onClick={() => navigateTo("customer")} className={`px-10 py-3 rounded-full text-[11px] font-black uppercase tracking-widest transition-all ${view === 'customer' ? 'text-white' : 'text-slate-500 hover:text-white'}`} style={view === 'customer' ? { backgroundColor: settings.primaryColor } : {}}>Menu</button>
-        <button onClick={() => navigateTo("owner")} className={`px-10 py-3 rounded-full text-[11px] font-black uppercase tracking-widest transition-all ${view === 'owner' ? 'bg-white text-black shadow-lg' : 'text-slate-500 hover:text-white'}`}>Admin</button>
+      {/* 🛠 TOP NAV */}
+      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[1000] flex bg-black/95 backdrop-blur-2xl p-2 rounded-full border border-white/10 shadow-2xl scale-90 md:scale-100">
+        <button 
+          onClick={() => navigateTo("customer")}
+          className={`px-10 py-3 rounded-full text-[11px] font-black uppercase tracking-widest transition-all ${view === 'customer' ? 'text-white' : 'text-slate-500 hover:text-white'}`}
+          style={view === 'customer' ? { backgroundColor: settings.primaryColor } : {}}
+        >
+          View Menu
+        </button>
+        <button 
+          onClick={() => navigateTo("owner")}
+          className={`px-10 py-3 rounded-full text-[11px] font-black uppercase tracking-widest transition-all ${view === 'owner' ? 'bg-white text-black shadow-lg' : 'text-slate-500 hover:text-white'}`}
+        >
+          Kitchen Admin
+        </button>
       </div>
 
       {view === "owner" ? (
         !isUnlocked ? (
           <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
-            <form onSubmit={(e) => { e.preventDefault(); if(passInput === OWNER_PASSWORD) setIsUnlocked(true); else setShowError(true); }} className="bg-white/5 border border-white/10 p-12 rounded-[4rem] w-full max-w-md text-center">
-              <div className="w-20 h-20 rounded-3xl mx-auto mb-8 flex items-center justify-center shadow-2xl rotate-3" style={{ backgroundColor: settings.primaryColor }}><span className="text-4xl text-white">🔒</span></div>
-              <h2 className="text-white text-3xl font-black italic uppercase mb-2 tracking-tighter tracking-tighter">Kitchen Access</h2>
-              <input type="password" value={passInput} onChange={e => setPassInput(e.target.value)} className={`w-full bg-black/40 border ${showError ? 'border-red-500' : 'border-white/10'} p-6 rounded-3xl text-white text-center text-lg outline-none mb-6`} placeholder="Password" />
-              <button type="submit" className="w-full py-7 text-white font-black rounded-3xl text-[11px] uppercase tracking-widest" style={{ backgroundColor: settings.primaryColor }}>Login</button>
+            <form onSubmit={handleAuthSubmit} className="bg-white/5 border border-white/10 p-12 rounded-[4rem] w-full max-w-md text-center backdrop-blur-md">
+              <div className="w-20 h-20 rounded-3xl mx-auto mb-8 flex items-center justify-center shadow-2xl rotate-3" style={{ backgroundColor: settings.primaryColor }}>
+                <span className="text-4xl text-white">🔒</span>
+              </div>
+              <h2 className="text-white text-3xl font-black italic uppercase mb-2 tracking-tighter">Owner Access</h2>
+              <input 
+                type="password"
+                value={passInput}
+                onChange={e => setPassInput(e.target.value)}
+                className={`w-full bg-black/40 border ${showError ? 'border-red-500' : 'border-white/10'} p-6 rounded-3xl text-white text-center text-lg outline-none focus:border-orange-500 transition-all`}
+                placeholder="Password"
+              />
+              <button type="submit" className="w-full mt-10 py-7 text-white font-black rounded-3xl text-[11px] uppercase tracking-widest" style={{ backgroundColor: settings.primaryColor }}>Enter Kitchen</button>
             </form>
           </div>
         ) : (
-          <div className="min-h-screen bg-slate-950 text-white p-6 pt-40 pb-60 max-w-6xl mx-auto">
-            <h1 className="text-5xl font-black italic uppercase mb-10" style={{ color: settings.primaryColor }}>Admin Dashboard</h1>
-            
-            {/* Quick Settings */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-               <div className="bg-white/5 p-8 rounded-[3rem] border border-white/10">
-                 <p className="text-[10px] font-black uppercase text-slate-500 mb-4">Shop Name</p>
-                 <input className="w-full bg-black/40 p-4 rounded-xl outline-none" value={settings.restaurantName} onChange={e => updateSettings("restaurantName", e.target.value)} />
-               </div>
-               <div className="bg-white/5 p-8 rounded-[3rem] border border-white/10">
-                 <p className="text-[10px] font-black uppercase text-slate-500 mb-4">WhatsApp Number</p>
-                 <input className="w-full bg-black/40 p-4 rounded-xl outline-none" value={settings.whatsapp} onChange={e => updateSettings("whatsapp", e.target.value)} />
-               </div>
+          <div className="min-h-screen bg-slate-950 text-white p-6 pt-32 md:p-12 md:pt-40 pb-60">
+            <header className="max-w-5xl mx-auto mb-20 flex justify-between items-end border-b border-white/5 pb-10">
+              <div>
+                <h1 className="text-5xl font-black italic uppercase tracking-tighter" style={{ color: settings.primaryColor }}>Kitchen HQ</h1>
+                <p className="text-slate-500 text-[10px] font-bold tracking-[0.4em] mt-3 uppercase">Syncing Live with Customers</p>
+              </div>
+              <button onClick={() => setIsUnlocked(false)} className="bg-white/5 px-8 py-3 rounded-full text-slate-400 text-[10px] font-black uppercase hover:text-white hover:bg-red-600 transition-all">Logout</button>
+            </header>
+
+            {/* Global Settings Panel */}
+            <div className="max-w-5xl mx-auto mb-16 bg-white/5 p-10 rounded-[4rem] border border-white/10">
+              <h3 className="text-xl font-black italic uppercase mb-8 text-white">Business Info</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-500 ml-4">Restaurant Name</label>
+                  <input className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl outline-none" value={settings.restaurantName} onChange={e => updateSettings("restaurantName", e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-500 ml-4">Vibe / Tagline</label>
+                  <input className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl outline-none" value={settings.tagline} onChange={e => updateSettings("tagline", e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-500 ml-4">WhatsApp Number</label>
+                  <input className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl outline-none" value={settings.whatsapp} onChange={e => updateSettings("whatsapp", e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-500 ml-4">Theme Color (Hex)</label>
+                  <input className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl outline-none" value={settings.primaryColor} onChange={e => updateSettings("primaryColor", e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                   <label className="text-[10px] font-black uppercase text-slate-500 ml-4">Opening Hours</label>
+                   <input className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl outline-none" value={settings.openingHours} onChange={e => updateSettings("openingHours", e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-500 ml-4">Physical Address</label>
+                  <input className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl outline-none" value={settings.locationDesc} onChange={e => updateSettings("locationDesc", e.target.value)} />
+                </div>
+              </div>
             </div>
 
-            {/* Categories */}
-            <div className="bg-white/5 p-10 rounded-[4rem] border border-white/10 mb-12">
-              <h3 className="text-xl font-black uppercase mb-6 italic">Menu Sections</h3>
-              <div className="flex flex-wrap gap-3 mb-6">
+            {/* Admin Add Category */}
+            <div className="max-w-5xl mx-auto mb-16 bg-white/5 p-10 rounded-[4rem] border border-white/10">
+              <h3 className="text-xl font-black italic uppercase mb-6 text-white">Sections</h3>
+              <div className="flex flex-wrap gap-3 mb-8">
                 {categories.map(c => (
-                  <div key={c} className="bg-white/10 px-5 py-3 rounded-2xl flex items-center gap-3">
-                    <span className="text-[10px] font-black uppercase">{c}</span>
-                    <button onClick={() => deleteCategory(c)} className="text-red-500 font-bold">×</button>
+                  <div key={String(c)} className="bg-white/10 px-5 py-3 rounded-2xl flex items-center gap-4 group">
+                    <span className="text-[11px] font-black uppercase tracking-wider">{String(c)}</span>
+                    <button onClick={() => deleteCategory(c)} className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">×</button>
                   </div>
                 ))}
               </div>
               <div className="flex gap-4">
-                <input className="flex-1 bg-black/40 p-5 rounded-2xl outline-none border border-white/10" placeholder="New Category..." value={newCatInput} onChange={e => setNewCatInput(e.target.value)} />
-                <button onClick={addCategory} className="bg-white text-black px-10 rounded-2xl font-black uppercase text-[10px]">Add</button>
+                <input 
+                  placeholder="New Section (e.g. Pizza, Steaks)" 
+                  className="flex-1 bg-black/40 border border-white/10 p-5 rounded-2xl outline-none focus:border-orange-500 text-sm"
+                  value={newCatInput}
+                  onChange={e => setNewCatInput(e.target.value)}
+                />
+                <button onClick={addCategory} className="bg-white text-black px-10 rounded-2xl font-black uppercase text-[10px] tracking-widest">Add Section</button>
               </div>
             </div>
 
-            {/* Add Item */}
-            <div className="bg-white/5 p-10 rounded-[4rem] border border-white/10 mb-12">
-              <h3 className="text-xl font-black uppercase mb-8 italic" style={{ color: settings.primaryColor }}>Add Menu Item</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <input className="bg-black/40 p-5 rounded-2xl outline-none" placeholder="Item Name" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
-                <select className="bg-black/40 p-5 rounded-2xl outline-none" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})}>
-                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <input className="bg-black/40 p-5 rounded-2xl outline-none" placeholder="Price (IQD)" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
-                <input className="bg-black/40 p-5 rounded-2xl outline-none" placeholder="Image URL" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
+            {/* Admin Add Item */}
+            <div className="max-w-5xl mx-auto mb-24 bg-white/5 border border-white/10 p-12 rounded-[5rem]">
+              <h3 className="text-2xl font-black italic uppercase mb-10" style={{ color: settings.primaryColor }}>Create New Item</h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <div className="md:col-span-2">
+                  <input placeholder="Item Name" className="w-full bg-black/60 border border-white/10 p-6 rounded-3xl outline-none text-sm" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                </div>
+                <div className="md:col-span-2">
+                  <select className="w-full bg-black/60 border border-white/10 p-6 rounded-3xl outline-none text-sm appearance-none cursor-pointer" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} >
+                    {categories.map(c => <option key={String(c)} value={String(c)}>{String(c)}</option>)}
+                  </select>
+                </div>
+                <input placeholder="Price (IQD)" className="w-full bg-black/60 border border-white/10 p-6 rounded-3xl outline-none text-sm" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
+                <input placeholder="Offer Price (Optional)" className="w-full bg-black/60 border border-orange-500/20 p-6 rounded-3xl outline-none text-sm" style={{ color: settings.primaryColor }} value={newItem.salePrice} onChange={e => setNewItem({...newItem, salePrice: e.target.value})} />
+                <input placeholder="Image Link (URL)" className="w-full md:col-span-2 bg-black/60 border border-white/10 p-6 rounded-3xl outline-none text-sm" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
+                <textarea placeholder="Description (Optional)" className="w-full md:col-span-4 bg-black/60 border border-white/10 p-6 rounded-3xl outline-none text-sm h-32 resize-none" value={newItem.desc} onChange={e => setNewItem({...newItem, desc: e.target.value})} />
+                <button onClick={addNewItem} className="md:col-span-4 py-8 rounded-[2.5rem] font-black uppercase text-[12px] tracking-[0.3em] shadow-2xl" style={{ backgroundColor: settings.primaryColor }}>Post to Menu</button>
               </div>
-              <button onClick={addNewItem} className="w-full py-6 rounded-2xl font-black uppercase tracking-widest" style={{ backgroundColor: settings.primaryColor }}>Save to Database</button>
             </div>
 
-            {/* List & Edit */}
-            <div className="space-y-4">
-              {menuItems.map(item => (
-                <div key={item.id} className="bg-white/5 p-6 rounded-3xl flex items-center justify-between border border-white/5">
-                  <div className="flex items-center gap-4">
-                    <img src={item.image} className="w-12 h-12 rounded-xl object-cover bg-slate-800" />
-                    <div>
-                      <p className="font-black text-sm uppercase">{item.name}</p>
-                      <p className="text-[10px] text-slate-500 uppercase">{item.category} • {item.price} IQD</p>
-                    </div>
+            {/* Existing Items - Interactive Editor */}
+            <div className="max-w-5xl mx-auto space-y-20">
+              {categories.map(cat => (
+                <div key={String(cat)} className="space-y-8">
+                  <h2 className="text-2xl font-black uppercase tracking-[0.4em] text-white italic">{String(cat)}</h2>
+                  <div className="grid grid-cols-1 gap-6">
+                    {menuItems.filter(i => i.category === cat).map(item => (
+                      <div key={item.id} className="bg-white/5 border border-white/5 p-8 rounded-[3.5rem] flex items-center gap-8 group">
+                        <img src={item.image || 'https://via.placeholder.com/150'} className="w-20 h-20 rounded-2xl object-cover bg-slate-800" loading="lazy" />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1">
+                          <input className="bg-transparent border-b border-white/10 p-2 text-white font-bold" value={item.name} onChange={e => updateCloudItem(item.id, "name", e.target.value)} />
+                          <div className="flex items-center gap-2">
+                            <input className="bg-transparent border-b border-white/10 p-2 text-white w-full" value={item.price} onChange={e => updateCloudItem(item.id, "price", parseInt(e.target.value) || 0)} />
+                            <span className="text-[8px] text-slate-500">IQD</span>
+                          </div>
+                          <button onClick={() => deleteItem(item.id)} className="bg-red-600/10 text-red-500 px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all">Remove Item</button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <button onClick={() => deleteItem(item.id)} className="text-red-500 text-[10px] font-black uppercase p-4">Delete</button>
                 </div>
               ))}
             </div>
           </div>
         )
       ) : (
-        <div className="pb-40">
-          <header className="py-24 px-6 text-center bg-white">
-            <h1 className="text-7xl md:text-9xl font-black italic uppercase tracking-tighter leading-[0.8]">
-              {settings.restaurantName.split(' ')[0]} <br/> 
-              <span style={{ color: settings.primaryColor }}>{settings.restaurantName.split(' ').slice(1).join(' ')}</span>
-            </h1>
-            <p className="mt-8 text-slate-400 text-[10px] font-black tracking-[1em] uppercase">{settings.tagline}</p>
+        <div className="pb-48">
+          {/* Customer Header */}
+          <header className="py-24 px-6 text-center bg-white relative overflow-hidden">
+             <h1 className="text-6xl md:text-9xl font-black italic uppercase tracking-tighter leading-none mb-4">
+                {settings.restaurantName.split(' ').slice(0,-1).join(' ')} <br/><span style={{ color: settings.primaryColor }}>{settings.restaurantName.split(' ').pop()}</span>
+             </h1>
+             <p className="text-slate-400 text-[10px] font-black tracking-[1em] uppercase">{settings.tagline}</p>
+             <div className="mt-4 flex flex-col items-center gap-2">
+                <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">{settings.openingHours}</span>
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-2">{settings.locationDesc}</span>
+             </div>
           </header>
 
-          <main className="max-w-6xl mx-auto px-6 py-12">
-            {!dataLoaded && menuItems.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 opacity-50">
-                <div className="w-8 h-8 border-2 border-slate-200 border-t-orange-600 rounded-full animate-spin mb-4"></div>
-                <p className="text-[8px] font-black uppercase tracking-widest">Waking up database...</p>
+          {/* Featured Deals */}
+          {discountedItems.length > 0 && (
+            <div className="bg-slate-900 py-12">
+               <div className="max-w-7xl mx-auto px-6 mb-8 flex items-center gap-4">
+                  <div className="w-3 h-3 rounded-full animate-ping" style={{ backgroundColor: settings.primaryColor }}></div>
+                  <h2 className="text-white text-2xl font-black uppercase italic">Hot Offers</h2>
+               </div>
+               <div className="flex overflow-x-auto gap-6 px-6 no-scrollbar">
+                  {discountedItems.map(item => (
+                    <div key={item.id + "_sale"} className="shrink-0 w-80 bg-white/5 p-6 rounded-[3rem] border border-white/10">
+                      <img src={item.image} className="w-full h-40 object-cover rounded-[2rem] mb-4 bg-slate-800" loading="lazy" />
+                      <h4 className="text-white font-black uppercase mb-1 truncate">{item.name}</h4>
+                      <div className="flex items-center gap-3">
+                         <span className="font-black" style={{ color: settings.primaryColor }}>{(item.salePrice || item.price).toLocaleString()} IQD</span>
+                         <span className="text-slate-500 line-through text-[10px]">{item.price.toLocaleString()}</span>
+                      </div>
+                      <button onClick={() => addToCart(item)} className="mt-4 w-full py-3 bg-white text-black font-black uppercase text-[10px] rounded-xl">Add to Tray</button>
+                    </div>
+                  ))}
+               </div>
+            </div>
+          )}
+
+          {/* Menu Sections */}
+          <main className="max-w-7xl mx-auto px-6 py-20 space-y-32 min-h-[40vh]">
+            {menuItems.length === 0 && !dataLoaded ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <div className="w-12 h-12 border-4 border-slate-200 border-t-orange-600 rounded-full animate-spin mb-6"></div>
+                <p className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-400">Loading Menu...</p>
+              </div>
+            ) : menuItems.length === 0 && dataLoaded ? (
+              <div className="text-center py-32 opacity-20">
+                <span className="text-6xl mb-6 block">🍽️</span>
+                <h3 className="text-xl font-black uppercase italic">Menu is being prepared</h3>
+                <p className="text-[10px] font-bold uppercase tracking-widest mt-2">The owner hasn't added items yet</p>
               </div>
             ) : (
-              Object.entries(groupedMenu).map(([cat, items]) => (
-                <section key={cat} className="mb-24">
-                  <h2 className="text-4xl font-black italic uppercase mb-10 tracking-tighter border-l-8 pl-6" style={{ borderColor: settings.primaryColor }}>{cat}</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              Object.entries(groupedMenu).map(([category, items]) => (
+                <section key={String(category)}>
+                  <h2 className="text-4xl font-black italic uppercase mb-12 tracking-tighter">{String(category)}</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                     {items.map(item => (
-                      <div key={item.id} className="bg-white rounded-[3.5rem] p-4 shadow-sm border border-slate-100 hover:shadow-xl transition-all group">
-                        <div className="h-60 rounded-[3rem] overflow-hidden bg-slate-100 mb-6 relative">
-                          <img src={item.image || 'https://via.placeholder.com/400'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                          <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-md px-5 py-2 rounded-2xl font-black shadow-xl">
-                            {item.price.toLocaleString()} <span className="text-[10px]">IQD</span>
+                      <div key={item.id} className="bg-white rounded-[4rem] overflow-hidden border border-slate-100 shadow-sm flex flex-col group transition-transform hover:-translate-y-2">
+                        <div className="h-64 overflow-hidden relative bg-slate-100">
+                          <img src={item.image || 'https://via.placeholder.com/600x400?text=Karbala+Burger'} className="w-full h-full object-cover" alt="" loading="lazy" />
+                          <div className="absolute top-6 right-6 bg-white px-4 py-2 rounded-2xl font-black text-lg shadow-lg">
+                             {(item.salePrice || item.price).toLocaleString()} <small className="text-[10px]">IQD</small>
                           </div>
                         </div>
-                        <div className="px-6 pb-6">
-                          <h3 className="text-xl font-black uppercase italic mb-2">{item.name}</h3>
-                          <p className="text-slate-400 text-[11px] mb-8 line-clamp-2 h-8">{item.desc || "Prepared fresh daily with premium ingredients."}</p>
+                        <div className="p-10 flex-1 flex flex-col">
+                          <h3 className="text-2xl font-black uppercase mb-3 italic">{item.name}</h3>
+                          <p className="text-slate-400 text-xs mb-8 flex-1">{item.desc || "The finest taste in the city."}</p>
                           {cart[item.id] ? (
-                            <div className="flex items-center bg-slate-950 text-white rounded-2xl p-1">
-                              <button onClick={() => removeFromCart(item.id)} className="flex-1 py-3 font-black">－</button>
-                              <span className="flex-1 text-center font-black">{cart[item.id]}</span>
-                              <button onClick={() => addToCart(item)} className="flex-1 py-3 font-black">＋</button>
-                            </div>
+                              <div className="flex items-center bg-slate-950 text-white rounded-3xl p-1 shadow-xl">
+                                  <button onClick={() => removeFromCart(item.id)} className="flex-1 py-4 font-black">－</button>
+                                  <span className="flex-1 text-center font-black">{cart[item.id]}</span>
+                                  <button onClick={() => addToCart(item)} className="flex-1 py-4 font-black">＋</button>
+                              </div>
                           ) : (
-                            <button onClick={() => addToCart(item)} className="w-full py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest border border-slate-200 hover:text-white transition-all" style={{ "--hover-bg": settings.primaryColor }} onMouseEnter={e => e.target.style.backgroundColor = settings.primaryColor} onMouseLeave={e => e.target.style.backgroundColor = ""}>Add to Tray</button>
+                              <button onClick={() => addToCart(item)} className="w-full py-5 bg-slate-50 text-slate-900 border border-slate-100 rounded-3xl font-black uppercase text-[10px] tracking-widest hover:text-white transition-all hover:border-transparent" style={{ "--hover-bg": settings.primaryColor }} onMouseEnter={e => e.target.style.backgroundColor = settings.primaryColor} onMouseLeave={e => e.target.style.backgroundColor = ""}>Add to Tray</button>
                           )}
                         </div>
                       </div>
@@ -369,24 +463,27 @@ export default function App() {
             )}
           </main>
 
+          {/* Floating Total */}
           {cartTotal > 0 && (
-            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[500] w-full max-w-sm px-6">
-              <button onClick={() => setIsCheckoutOpen(true)} className="w-full bg-slate-950 text-white p-5 rounded-[2.5rem] shadow-2xl flex items-center justify-between border border-white/10 group active:scale-95 transition-all">
+            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[500] w-full max-w-md px-6 animate-in slide-in-from-bottom-10">
+              <button onClick={() => setIsCheckoutOpen(true)} className="w-full bg-slate-950 text-white p-6 rounded-[3rem] shadow-2xl flex items-center justify-between border border-white/10">
                 <div className="text-left pl-4">
-                  <p className="text-2xl font-black tracking-tighter" style={{ color: settings.primaryColor }}>{cartTotal.toLocaleString()} IQD</p>
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Total</p>
+                  <p className="text-3xl font-black tracking-tighter" style={{ color: settings.primaryColor }}>{cartTotal.toLocaleString()} IQD</p>
                 </div>
-                <span className="px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest" style={{ backgroundColor: settings.primaryColor }}>Checkout</span>
+                <span className="px-10 py-5 rounded-[2.5rem] font-black text-[10px] uppercase tracking-widest" style={{ backgroundColor: settings.primaryColor }}>Order Now</span>
               </button>
             </div>
           )}
 
+          {/* Checkout Modal */}
           {isCheckoutOpen && (
-            <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-md">
-              <div className="bg-white w-full max-w-md rounded-[4rem] p-12 relative">
-                <button onClick={() => setIsCheckoutOpen(false)} className="absolute top-8 right-10 text-2xl font-black">×</button>
-                <h2 className="text-4xl font-black italic uppercase mb-8 tracking-tighter">Delivery Details</h2>
-                <textarea value={address} onChange={e => setAddress(e.target.value)} className="w-full p-6 bg-slate-50 rounded-3xl text-sm h-32 mb-8 outline-none border border-slate-100 focus:border-orange-500 font-bold" placeholder="Area / Street / Building..." />
-                <button disabled={!address.trim()} onClick={handleCheckout} className="w-full py-8 bg-[#25D366] text-white font-black rounded-3xl text-[11px] uppercase tracking-widest disabled:opacity-50 shadow-xl shadow-green-500/20">Send via WhatsApp</button>
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl">
+              <div className="bg-white w-full max-w-sm rounded-[4rem] p-10 shadow-2xl">
+                <h2 className="text-4xl font-black italic uppercase mb-2 tracking-tighter">Delivery</h2>
+                <textarea value={address} onChange={e => setAddress(e.target.value)} className="w-full p-6 bg-slate-50 rounded-3xl text-sm h-32 mb-8 outline-none border border-slate-100 focus:border-orange-500 font-bold" placeholder="Your Address (Neighborhood / Street)..." />
+                <button disabled={!address.trim()} onClick={handleCheckout} className="w-full py-8 bg-[#25D366] text-white font-black rounded-3xl text-[11px] uppercase tracking-widest disabled:opacity-50">Order via WhatsApp</button>
+                <button onClick={() => setIsCheckoutOpen(false)} className="w-full mt-6 text-slate-400 font-black text-[10px] uppercase tracking-widest">Close</button>
               </div>
             </div>
           )}
