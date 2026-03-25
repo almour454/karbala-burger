@@ -84,7 +84,9 @@ export default function App() {
     facebookUrl: "",
     instagramUrl: "",
     tiktokUrl: "",
-    checkoutNote: "يرجى التأكد من الاسم ورقم الهاتف قبل إرسال الطلب."
+    checkoutNote: "يرجى التأكد من الاسم ورقم الهاتف قبل إرسال الطلب.",
+    dealsSectionTitle: "عروض نارية 🔥",
+    cartDeliveryNote: "رسوم التوصيل حسب المنطقة — لا تُضاف تلقائيًا للمجموع."
   });
 
   const [cart, setCart] = useState({});
@@ -361,6 +363,8 @@ export default function App() {
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="Instagram URL" value={settings.instagramUrl || ""} onChange={e => updateGlobalSettings("instagramUrl", e.target.value)} />
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2" placeholder="TikTok URL" value={settings.tiktokUrl || ""} onChange={e => updateGlobalSettings("tiktokUrl", e.target.value)} />
                 <textarea className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2 h-24 resize-none" placeholder="رسالة تظهر عند متابعة الطلب" value={settings.checkoutNote || ""} onChange={e => updateGlobalSettings("checkoutNote", e.target.value)} />
+                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2" placeholder="عنوان قسم الخصومات (مثال: عروض نارية 🔥)" value={settings.dealsSectionTitle || ""} onChange={e => updateGlobalSettings("dealsSectionTitle", e.target.value)} />
+                <textarea className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2 h-20 resize-none" placeholder="ملاحظة بجانب السعر (توصيل، مناطق، إلخ)" value={settings.cartDeliveryNote || ""} onChange={e => updateGlobalSettings("cartDeliveryNote", e.target.value)} />
                 <div className="flex items-center gap-4 bg-black/40 p-4 rounded-xl border border-white/5">
                   <span className="text-white text-[10px] font-bold">اللون الأساسي</span>
                   <input type="color" className="w-10 h-10 rounded bg-transparent border-0 cursor-pointer" value={settings.primaryColor} onChange={e => updateGlobalSettings("primaryColor", e.target.value)} />
@@ -515,7 +519,7 @@ export default function App() {
             <section className="py-6 overflow-hidden deals-strip relative">
                 <div className="deals-strip-bg pointer-events-none absolute inset-0 opacity-40" style={{ background: `linear-gradient(90deg, transparent, ${settings.primaryColor}33, transparent)` }} />
                 <div className="px-6 flex items-center justify-center mb-6 relative z-10" dir="rtl">
-                   <h2 className="deals-title-glow text-[22px] font-black uppercase italic inline-block" style={{ color: settings.primaryColor }}>عروض نارية <span className="deals-fire inline-block">🔥</span></h2>
+                   <h2 className="deals-title-glow text-[22px] font-black uppercase italic inline-block" style={{ color: settings.primaryColor }}>{settings.dealsSectionTitle || "عروض نارية 🔥"}</h2>
                 </div>
                 <div className="flex gap-4 px-6 overflow-x-auto no-scrollbar pb-8 snap-x relative z-10">
                   {discountItems.map((item, di) => (
@@ -598,13 +602,34 @@ export default function App() {
 
           {/* FOOTER CART */}
           {cartTotal > 0 && (
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-sm px-4">
-              <button onClick={() => setIsCheckoutOpen(true)} className="w-full bg-black text-white p-3 rounded-full shadow-2xl flex items-center justify-between">
-                <div className="flex items-center gap-3 pl-2" dir="ltr">
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center font-black text-lg" style={{ backgroundColor: settings.primaryColor }}>{Object.values(cart).reduce((a,b)=>a+b,0)}</div>
-                  <div className="text-left"><p className="text-lg font-black leading-none">{cartTotal.toLocaleString()} <span className="text-[10px]">IQD</span></p></div>
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-md px-4">
+              <button
+                type="button"
+                onClick={() => setIsCheckoutOpen(true)}
+                className="cart-bar-glow w-full rounded-[1.75rem] shadow-2xl border overflow-hidden text-left transition-transform active:scale-[0.98]"
+                style={{
+                  borderColor: `${settings.bgColor}55`,
+                  background: `linear-gradient(125deg, ${settings.primaryColor} 0%, #1c1917 52%, ${settings.primaryColor}cc 100%)`,
+                  boxShadow: `0 12px 40px ${settings.primaryColor}55, 0 0 0 1px ${settings.bgColor}22 inset`
+                }}
+              >
+                <div className="relative px-4 py-3 flex items-center justify-between gap-2">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-white/[0.12] pointer-events-none" />
+                  <div
+                    className="absolute bottom-0 left-0 right-0 h-1/2 opacity-[0.22] pointer-events-none"
+                    style={{ background: `linear-gradient(to top, ${settings.bgColor}, transparent)` }}
+                  />
+                  <div className="relative z-10 flex items-center gap-3 min-w-0 flex-1" dir="ltr">
+                    <div className="w-12 h-12 shrink-0 rounded-full flex items-center justify-center font-black text-lg text-white shadow-lg ring-2 ring-white/35 bg-black/40" style={{ boxShadow: `0 4px 22px ${settings.primaryColor}99` }}>{Object.values(cart).reduce((a,b)=>a+b,0)}</div>
+                    <div className="text-left min-w-0">
+                      <p className="text-lg font-black leading-tight text-white drop-shadow-md">{cartTotal.toLocaleString()} <span className="text-[10px] font-bold opacity-90">د.ع</span></p>
+                      {settings.cartDeliveryNote && (
+                        <p className="text-[9px] font-bold text-white/85 leading-snug line-clamp-2 drop-shadow-sm mt-0.5">{settings.cartDeliveryNote}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="relative z-10 shrink-0 pr-1 text-white font-black text-[10px] uppercase italic tracking-widest drop-shadow-md">تأكيد ➔</div>
                 </div>
-                <div className="pr-8 font-black text-[10px] uppercase italic tracking-widest">تأكيد الطلب ➔</div>
               </button>
             </div>
           )}
@@ -627,8 +652,13 @@ export default function App() {
                         </div>
                       )
                     })}
-                    <div className="border-t border-slate-200 mt-4 pt-4 flex justify-between items-center">
-                      <span className="text-3xl font-black tracking-tighter" style={{ color: settings.primaryColor }}>{cartTotal.toLocaleString()} <span className="text-xs">د.ع</span></span>
+                    <div className="border-t border-slate-200 mt-4 pt-4 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-3xl font-black tracking-tighter" style={{ color: settings.primaryColor }}>{cartTotal.toLocaleString()} <span className="text-xs">د.ع</span></span>
+                      </div>
+                      {settings.cartDeliveryNote && (
+                        <p className="text-[11px] font-bold text-slate-500 leading-snug text-right">{settings.cartDeliveryNote}</p>
+                      )}
                     </div>
                 </div>
                 <div className="space-y-3 mb-8">
