@@ -49,8 +49,6 @@ const getMenuCollection = () => collection(db, 'artifacts', appId, 'public', 'da
 const getSettingsDoc = () => doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
 
 const OWNER_PASSWORD = "12345"; 
-
-// Helper for broken images
 const PLACEHOLDER = "https://images.unsplash.com/photo-1550547660-d9450f859349?q=80&w=200&auto=format&fit=crop";
 
 export default function App() {
@@ -80,9 +78,7 @@ export default function App() {
   const [passInput, setPassInput] = useState("");
   const [showError, setShowError] = useState(false);
 
-  // Admin Form States
   const [newItem, setNewItem] = useState({ name: "", price: "", salePrice: "", desc: "", image: "", category: "برجر" });
-  const [newCatInput, setNewCatInput] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
 
   useEffect(() => {
@@ -148,7 +144,7 @@ export default function App() {
 
   const handleAddItem = async () => {
     if (!user || !newItem.name || !newItem.price) return;
-    const id = "item_" + Date.now();
+    const id = newItem.id || "item_" + Date.now();
     try {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id), {
         ...newItem,
@@ -168,19 +164,6 @@ export default function App() {
   const handleDeleteItem = async (id) => {
     if (!user) return;
     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id));
-  };
-
-  const handleAddCategory = async () => {
-    if (!user || !newCatInput.trim()) return;
-    const updated = [...new Set([...categories, newCatInput.trim()])];
-    await updateGlobalSettings("categories", updated);
-    setNewCatInput("");
-  };
-
-  const handleDeleteCategory = async (cat) => {
-    if (!user) return;
-    const updated = categories.filter(c => c !== cat);
-    await updateGlobalSettings("categories", updated);
   };
 
   const addToCart = (item) => setCart(p => ({ ...p, [item.id]: (p[item.id] || 0) + 1 }));
@@ -216,8 +199,8 @@ export default function App() {
   return (
     <div className="min-h-screen transition-colors duration-500" style={{ backgroundColor: settings.bgColor, fontFamily: 'sans-serif' }}>
       
-      {/* NAVIGATION */}
-      <div className="sticky top-0 z-[100] flex justify-center p-4">
+      {/* NAVIGATION - Now Static (Not Sticky) */}
+      <div className="flex justify-center p-4">
         <div className="flex bg-black/90 backdrop-blur-md p-1 rounded-full border border-white/10 shadow-2xl">
           <button onClick={() => navigateTo("customer")} className={`px-8 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'customer' ? 'text-white shadow-lg' : 'text-slate-500'}`} style={view === 'customer' ? { backgroundColor: settings.primaryColor } : {}}>المنيو</button>
           <button onClick={() => navigateTo("owner")} className={`px-8 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'owner' ? 'bg-white text-black shadow-lg' : 'text-slate-500'}`}>الإدارة</button>
@@ -252,10 +235,9 @@ export default function App() {
             </section>
 
             {/* ADD ITEM WITH PREVIEW */}
-            <section className="bg-slate-900 rounded-[2.5rem] p-8 border border-white/10 shadow-xl">
+            <section id="item-form" className="bg-slate-900 rounded-[2.5rem] p-8 border border-white/10 shadow-xl">
               <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em] mb-6">إضافة وجبة مصورة</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Form Side */}
                 <div className="space-y-4">
                     <input className="w-full bg-black/40 border border-white/5 p-4 rounded-xl text-white font-bold" placeholder="اسم الوجبة" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
                     <textarea className="w-full bg-black/40 border border-white/5 p-4 rounded-xl text-white text-xs h-20" placeholder="وصف المكونات" value={newItem.desc} onChange={e => setNewItem({...newItem, desc: e.target.value})} />
@@ -268,7 +250,6 @@ export default function App() {
                     </select>
                 </div>
                 
-                {/* Image & Preview Side */}
                 <div className="flex flex-col gap-4">
                     <div className="relative group w-full aspect-video bg-black rounded-2xl overflow-hidden border border-white/10 flex items-center justify-center">
                         {newItem.image ? (
@@ -286,7 +267,7 @@ export default function App() {
               </div>
             </section>
 
-            {/* VISUAL LIST (THE BIG FIX) */}
+            {/* VISUAL LIST */}
             <section className="bg-slate-900 rounded-[2.5rem] p-8 border border-white/10 shadow-xl">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em]">قائمة الوجبات الحالية</h3>
@@ -294,12 +275,7 @@ export default function App() {
               </div>
               
               <div className="grid grid-cols-1 gap-3">
-                {menuItems.length === 0 ? (
-                  <div className="text-center py-20 bg-black/20 rounded-3xl border border-dashed border-white/5">
-                    <p className="text-white/20 text-sm italic font-bold">لا توجد وجبات لعرضها</p>
-                  </div>
-                ) : (
-                  menuItems.map(item => (
+                {menuItems.map(item => (
                     <div key={item.id} className="bg-black/40 p-3 rounded-2xl border border-white/5 flex items-center justify-between group hover:border-white/20 transition-all">
                       <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-800 shadow-inner">
@@ -319,30 +295,11 @@ export default function App() {
                       </div>
                       
                       <div className="flex gap-2">
-                        <button 
-                            onClick={() => {
-                                // Scroll up and populate form for "editing"
-                                setNewItem({...item});
-                                window.scrollTo({ top: 0, behavior: 'smooth' });
-                            }}
-                            className="text-white/40 hover:text-white p-3 text-[10px] font-black uppercase"
-                        >
-                            تعديل
-                        </button>
-                        <button 
-                            onClick={() => {
-                                if(window.confirm(`هل أنت متأكد من حذف ${item.name}؟`)) {
-                                    handleDeleteItem(item.id);
-                                }
-                            }}
-                            className="bg-red-500/10 text-red-500 px-4 py-2 rounded-xl hover:bg-red-500 hover:text-white transition-all text-[10px] font-black uppercase"
-                        >
-                            حذف
-                        </button>
+                        <button onClick={() => { setNewItem({...item}); document.getElementById('item-form').scrollIntoView({ behavior: 'smooth' }); }} className="text-white/40 hover:text-white p-3 text-[10px] font-black uppercase">تعديل</button>
+                        <button onClick={() => { if(window.confirm(`حذف ${item.name}؟`)) handleDeleteItem(item.id); }} className="bg-red-500/10 text-red-500 px-4 py-2 rounded-xl hover:bg-red-500 hover:text-white transition-all text-[10px] font-black uppercase">حذف</button>
                       </div>
                     </div>
-                  ))
-                )}
+                ))}
               </div>
             </section>
 
@@ -352,18 +309,14 @@ export default function App() {
         <div className="pb-40">
           {/* CUSTOMER HEADER */}
           <header className="pt-10 pb-8 px-6 text-center animate-fade-in">
-             <h1 className="text-6xl font-black italic uppercase tracking-tighter leading-tight text-slate-950">
-                {settings.restaurantName}
-             </h1>
+             <h1 className="text-6xl font-black italic uppercase tracking-tighter leading-tight text-slate-950">{settings.restaurantName}</h1>
              <h2 className="text-4xl font-black text-slate-800/40 mt-1">{settings.restaurantNameAr}</h2>
              <div className="mt-8 flex flex-col items-center gap-3">
                 <div className="flex items-center gap-3 bg-black text-white px-6 py-2.5 rounded-full shadow-2xl">
                    <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
                    <span className="text-[11px] font-black uppercase tracking-widest">{settings.openingHours}</span>
                 </div>
-                <div className="text-[12px] font-black text-slate-900/40 uppercase tracking-tighter" dir="rtl">
-                   📍 {settings.locationDesc}
-                </div>
+                <div className="text-[12px] font-black text-slate-900/40 uppercase tracking-tighter" dir="rtl">📍 {settings.locationDesc}</div>
              </div>
           </header>
 
@@ -394,8 +347,8 @@ export default function App() {
             </section>
           )}
 
-          {/* CATEGORIES */}
-          <div className="sticky top-16 z-50 py-4 bg-transparent backdrop-blur-sm">
+          {/* CATEGORIES - Not Sticky anymore */}
+          <div className="py-4 bg-transparent">
             <div className="max-w-6xl mx-auto flex gap-2 px-6 overflow-x-auto no-scrollbar justify-start md:justify-center" dir="rtl">
               <button onClick={() => setActiveCategory("الكل")} className={`shrink-0 px-8 py-3.5 rounded-2xl text-[12px] font-black transition-all ${activeCategory === "الكل" ? 'bg-black text-white shadow-xl' : 'bg-white text-slate-400 border border-black/5'}`}>الكل</button>
               {categories.map(cat => (
@@ -409,7 +362,7 @@ export default function App() {
             {filteredItems.map(item => (
                 <div key={item.id} className="bg-white rounded-[2.5rem] p-4 flex flex-col border border-black/5 shadow-lg hover:shadow-2xl transition-all group">
                   <div className="w-full aspect-square rounded-[2rem] overflow-hidden bg-slate-50 mb-5 relative">
-                    <img src={item.image || PLACEHOLDER} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" onError={(e) => e.target.src = PLACEHOLDER} alt={item.name} />
+                    <img src={item.image || PLACEHOLDER} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" onError={(e) => e.target.src = PLACEHOLDER} />
                   </div>
                   <div className="flex-1 flex flex-col justify-between px-2">
                     <div className="mb-4">
@@ -439,22 +392,20 @@ export default function App() {
               <button onClick={() => setIsCheckoutOpen(true)} className="w-full bg-black text-white p-3 rounded-full shadow-2xl flex items-center justify-between">
                 <div className="flex items-center gap-3 pl-2" dir="ltr">
                   <div className="w-12 h-12 rounded-full flex items-center justify-center font-black text-lg" style={{ backgroundColor: settings.primaryColor }}>{Object.values(cart).reduce((a,b)=>a+b,0)}</div>
-                  <div className="text-left">
-                    <p className="text-lg font-black leading-none">{cartTotal.toLocaleString()} <span className="text-[10px]">IQD</span></p>
-                  </div>
+                  <div className="text-left"><p className="text-lg font-black leading-none">{cartTotal.toLocaleString()} <span className="text-[10px]">IQD</span></p></div>
                 </div>
                 <div className="pr-8 font-black text-[10px] uppercase italic tracking-widest">تأكيد الطلب ➔</div>
               </button>
             </div>
           )}
 
-          {/* CHECKOUT */}
+          {/* CHECKOUT MODAL */}
           {isCheckoutOpen && (
             <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
               <div className="bg-white w-full max-w-lg rounded-[3rem] p-8 shadow-2xl overflow-y-auto max-h-[90vh] animate-slide-up" dir="rtl">
                 <div className="flex justify-between items-center mb-8">
                   <h2 className="text-3xl font-black italic">طلبك 📝</h2>
-                  <button onClick={() => setIsCheckoutOpen(false)} className="w-12 h-12 bg-slate-100 rounded-full font-black text-2xl flex items-center justify-center transition-transform hover:rotate-90">×</button>
+                  <button onClick={() => setIsCheckoutOpen(false)} className="w-12 h-12 bg-slate-100 rounded-full font-black text-2xl flex items-center justify-center">×</button>
                 </div>
                 <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 mb-8 space-y-3">
                     {Object.entries(cart).map(([id, q]) => {
@@ -491,7 +442,6 @@ export default function App() {
         .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
         .animate-shake { animation: shake 0.2s ease-in-out 0s 2; }
-        .scale-in { animation: fadeIn 0.5s ease-out; }
       `}} />
     </div>
   );
