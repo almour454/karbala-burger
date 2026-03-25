@@ -431,15 +431,15 @@ export default function App() {
                         <div className="flex justify-between items-end">
                            <button onClick={() => addToCart(item)} className="bg-white w-9 h-9 rounded-full flex items-center justify-center font-black shadow-lg text-base text-black hover:scale-105 transition-transform">＋</button>
                            <div className="text-right">
-                             <p className="text-[12px] font-black opacity-75 mb-1">
-                               <span className="old-price-fancy">{Number(item.price || 0).toLocaleString()}</span>
-                               <span className="mr-1">د.ع</span>
+                             <p className="text-[12px] font-black mb-1 text-amber-200">
+                               <span className="old-price-fancy old-price-hot">{Number(item.price || 0).toLocaleString()}</span>
+                               <span className="mr-1 text-amber-100">د.ع</span>
                              </p>
                              <p className="text-[30px] font-black tracking-tight leading-none">{Number(item.salePrice || 0).toLocaleString()} <span className="text-xs">د.ع</span></p>
                           </div>
                         </div>
                       </div>
-                      <img src={item.image} className="absolute -top-7 -left-7 w-24 h-24 object-cover opacity-[0.08] -rotate-12 rounded-[2rem] saturate-0" onError={(e) => e.target.src = PLACEHOLDER} />
+                      <img src={item.image} className="absolute -top-10 -left-10 w-40 h-40 object-cover opacity-[0.18] -rotate-12 rounded-[2.4rem] saturate-75 contrast-110" onError={(e) => e.target.src = PLACEHOLDER} />
                     </div>
                   ))}
                 </div>
@@ -551,6 +551,9 @@ export default function App() {
           text-decoration-thickness: 2px;
           text-decoration-color: rgba(255, 255, 255, 0.95);
           text-decoration-skip-ink: none;
+        }
+        .old-price-hot {
+          text-decoration-color: rgba(239, 68, 68, 0.95);
         }
       `}} />
     </div>
