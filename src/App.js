@@ -71,6 +71,10 @@ export default function App() {
   const [cart, setCart] = useState({});
   const [dataLoaded, setDataLoaded] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  
+  // New Checkout Fields
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
   const [address, setAddress] = useState("");
   
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -206,8 +210,12 @@ export default function App() {
 
   const handleCheckout = () => {
     const items = Object.entries(cart).map(([id, q]) => `${q}x ${menuItems.find(m=>m.id===id)?.name}`).join('\n');
-    const waUrl = `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(`🔥 ${settings.restaurantName} ORDER 🔥\n\n${items}\n\n💰 TOTAL: ${cartTotal.toLocaleString()} IQD\n📍 ADDR: ${address}`)}`;
+    const text = `🔥 ${settings.restaurantName} ORDER 🔥\n\n👤 Name: ${customerName}\n📞 Phone: ${customerPhone}\n📍 Address: ${address}\n\n🛒 ORDER DETAILS:\n${items}\n\n💰 TOTAL: ${cartTotal.toLocaleString()} IQD`;
+    const waUrl = `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(text)}`;
     window.open(waUrl);
+    // Optionally clear cart and close modal here
+    // setCart({});
+    // setIsCheckoutOpen(false);
   };
 
   return (
@@ -248,14 +256,29 @@ export default function App() {
         ) : (
           <div className="min-h-screen bg-slate-950 text-white p-6 pt-24 pb-40">
             <div className="max-w-4xl mx-auto space-y-10">
+              
               {/* Business Settings */}
               <section className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10">
                 <h3 className="text-sm font-black uppercase opacity-40 mb-6">Store Setup</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Store Name" value={settings.restaurantName} onChange={e => updateSettings("restaurantName", e.target.value)} />
-                  <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="WhatsApp" value={settings.whatsapp} onChange={e => updateSettings("whatsapp", e.target.value)} />
+                  <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="WhatsApp Number" value={settings.whatsapp} onChange={e => updateSettings("whatsapp", e.target.value)} />
                   <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Opening Hours" value={settings.openingHours} onChange={e => updateSettings("openingHours", e.target.value)} />
                   <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Location" value={settings.locationDesc} onChange={e => updateSettings("locationDesc", e.target.value)} />
+                  
+                  {/* Theme Color Picker */}
+                  <div className="md:col-span-2 flex items-center justify-between bg-black/40 border border-white/10 p-4 rounded-xl">
+                    <div>
+                      <p className="text-sm font-bold">Brand Theme Color</p>
+                      <p className="text-[10px] opacity-50">Click the color square to change</p>
+                    </div>
+                    <input 
+                      type="color" 
+                      value={settings.primaryColor} 
+                      onChange={e => updateSettings("primaryColor", e.target.value)}
+                      className="w-12 h-12 rounded cursor-pointer border-0 bg-transparent"
+                    />
+                  </div>
                 </div>
               </section>
 
@@ -265,7 +288,7 @@ export default function App() {
                 <div className="flex flex-wrap gap-2 mb-4">
                   {categories.map(c => (
                     <div key={c} className="bg-white/10 px-4 py-2 rounded-xl flex items-center gap-3 text-[10px] font-black uppercase">
-                      {c} <button onClick={() => deleteCategory(c)} className="text-red-500 font-bold">×</button>
+                      {c} <button onClick={() => deleteCategory(c)} className="text-red-500 font-bold hover:scale-125 transition-transform">×</button>
                     </div>
                   ))}
                 </div>
@@ -278,8 +301,8 @@ export default function App() {
               {/* Add Item with Discount Tab Logic */}
               <section className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10">
                 <h3 className="text-sm font-black uppercase opacity-40 mb-6">New Item</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <input className="col-span-2 bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Item Name" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input className="md:col-span-2 bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Item Name" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
                   <select className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} >
                     {categories.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -287,8 +310,8 @@ export default function App() {
                     <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Normal Price" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
                     <input className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl text-sm text-orange-400 placeholder:text-orange-900" placeholder="Discount Price" value={newItem.salePrice} onChange={e => setNewItem({...newItem, salePrice: e.target.value})} />
                   </div>
-                  <input className="col-span-2 bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Image Link" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
-                  <button onClick={addNewItem} className="col-span-2 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest" style={{ backgroundColor: settings.primaryColor }}>Save to Menu</button>
+                  <input className="md:col-span-2 bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Image Link" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
+                  <button onClick={addNewItem} className="md:col-span-2 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-opacity hover:opacity-90" style={{ backgroundColor: settings.primaryColor }}>Save to Menu</button>
                 </div>
               </section>
 
@@ -306,7 +329,7 @@ export default function App() {
                         </p>
                       </div>
                     </div>
-                    <button onClick={() => deleteItem(item.id)} className="text-red-500 text-[10px] font-black uppercase px-4">Delete</button>
+                    <button onClick={() => deleteItem(item.id)} className="text-red-500 text-[10px] font-black uppercase px-4 hover:scale-110 transition-transform">Delete</button>
                   </div>
                 ))}
               </div>
@@ -315,7 +338,7 @@ export default function App() {
         )
       ) : (
         <div className="pb-40">
-          {/* Mobile Header */}
+          {/* Header */}
           <header className="pt-24 pb-8 px-6 text-center bg-white">
              <h1 className="text-4xl font-black italic uppercase tracking-tighter leading-tight">
                 {settings.restaurantName}
@@ -326,44 +349,49 @@ export default function App() {
           {/* 🔥 DISCOUNTS WINDOW (Horizontal Slider) */}
           {discountItems.length > 0 && (
             <section className="bg-white pt-2 pb-6">
-              <div className="px-6 flex items-center justify-between mb-4">
-                <h2 className="text-[11px] font-black uppercase tracking-widest text-orange-600">🔥 Hot Deals Today</h2>
-              </div>
-              <div className="flex gap-4 px-6 overflow-x-auto no-scrollbar pb-2">
-                {discountItems.map(item => (
-                  <div key={item.id} className="shrink-0 w-64 bg-orange-500 rounded-[2rem] p-4 text-white relative overflow-hidden shadow-lg shadow-orange-500/20">
-                    <div className="relative z-10">
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="bg-white text-orange-600 text-[8px] font-black px-3 py-1 rounded-full uppercase">Save {(item.price - item.salePrice).toLocaleString()} IQD</span>
-                      </div>
-                      <h3 className="text-lg font-black italic uppercase leading-tight mb-4">{item.name}</h3>
-                      <div className="flex justify-between items-end">
-                        <div>
-                           <p className="text-[9px] opacity-60 line-through">{item.price.toLocaleString()} IQD</p>
-                           <p className="text-xl font-black">{item.salePrice.toLocaleString()} <span className="text-[10px]">IQD</span></p>
+              <div className="max-w-6xl mx-auto">
+                <div className="px-6 flex items-center justify-between mb-4">
+                  <h2 className="text-[11px] font-black uppercase tracking-widest text-orange-600">🔥 Hot Deals Today</h2>
+                </div>
+                <div className="flex gap-4 px-6 overflow-x-auto no-scrollbar pb-4 snap-x">
+                  {discountItems.map(item => (
+                    <div key={item.id} className="snap-start shrink-0 w-72 bg-orange-500 rounded-[2rem] p-5 text-white relative overflow-hidden shadow-lg shadow-orange-500/20" style={{ backgroundColor: settings.primaryColor }}>
+                      <div className="relative z-10">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="bg-white text-[8px] font-black px-3 py-1 rounded-full uppercase" style={{ color: settings.primaryColor }}>
+                            Save {(item.price - item.salePrice).toLocaleString()} IQD
+                          </span>
                         </div>
-                        <button 
-                          onClick={() => addToCart(item)}
-                          className="bg-white text-orange-600 w-10 h-10 rounded-full flex items-center justify-center font-black shadow-lg shadow-black/10 active:scale-90 transition-transform"
-                        >
-                          ＋
-                        </button>
+                        <h3 className="text-xl font-black italic uppercase leading-tight mb-6">{item.name}</h3>
+                        <div className="flex justify-between items-end">
+                          <div>
+                             <p className="text-[10px] opacity-70 line-through mb-1">{item.price.toLocaleString()} IQD</p>
+                             <p className="text-2xl font-black">{item.salePrice.toLocaleString()} <span className="text-[10px]">IQD</span></p>
+                          </div>
+                          <button 
+                            onClick={() => addToCart(item)}
+                            className="bg-white w-12 h-12 rounded-full flex items-center justify-center font-black shadow-lg shadow-black/10 active:scale-90 transition-transform hover:scale-105"
+                            style={{ color: settings.primaryColor }}
+                          >
+                            ＋
+                          </button>
+                        </div>
                       </div>
+                      {/* Decorative Background Image Overlay */}
+                      <img src={item.image} className="absolute top-0 right-0 w-40 h-40 object-cover opacity-20 -mr-8 -mt-8 rounded-full rotate-12" />
                     </div>
-                    {/* Decorative Background Image Overlay */}
-                    <img src={item.image} className="absolute top-0 right-0 w-32 h-32 object-cover opacity-20 -mr-6 -mt-6 rounded-full rotate-12" />
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </section>
           )}
 
           {/* 🍔 CATEGORY SELECTOR (Horizontal Scroll) */}
           <div className="sticky top-[68px] z-[900] bg-slate-50/80 backdrop-blur-lg py-4 border-b border-slate-200">
-            <div className="flex gap-2 px-6 overflow-x-auto no-scrollbar">
+            <div className="max-w-6xl mx-auto flex gap-2 px-6 overflow-x-auto no-scrollbar">
               <button 
                 onClick={() => setActiveCategory("All")}
-                className={`shrink-0 px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeCategory === "All" ? 'bg-black text-white' : 'bg-white border border-slate-200 text-slate-500'}`}
+                className={`shrink-0 px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeCategory === "All" ? 'bg-black text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-100'}`}
               >
                 All
               </button>
@@ -371,7 +399,7 @@ export default function App() {
                 <button 
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
-                  className={`shrink-0 px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeCategory === cat ? 'text-white' : 'bg-white border border-slate-200 text-slate-500'}`}
+                  className={`shrink-0 px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeCategory === cat ? 'text-white shadow-md' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-100'}`}
                   style={activeCategory === cat ? { backgroundColor: settings.primaryColor } : {}}
                 >
                   {cat}
@@ -380,24 +408,26 @@ export default function App() {
             </div>
           </div>
 
-          {/* 📱 MOBILE LIST VIEW */}
-          <main className="max-w-xl mx-auto px-4 py-8 space-y-4">
+          {/* 💻 & 📱 RESPONSIVE GRID LIST VIEW */}
+          <main className="max-w-6xl mx-auto px-6 py-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredItems.length === 0 ? (
-              <div className="text-center py-20 opacity-30">
+              <div className="col-span-full text-center py-20 opacity-30">
                 <p className="font-black uppercase text-xs">Nothing in {activeCategory} yet...</p>
               </div>
             ) : (
               filteredItems.map(item => (
-                <div key={item.id} className="bg-white rounded-[2rem] p-3 flex gap-4 border border-slate-100 shadow-sm items-center">
+                <div key={item.id} className="bg-white rounded-[2rem] p-3 flex gap-4 border border-slate-100 shadow-sm hover:shadow-md transition-shadow items-center h-full">
                   <div className="w-24 h-24 shrink-0 rounded-[1.5rem] overflow-hidden bg-slate-50">
                     <img src={item.image || 'https://via.placeholder.com/200'} className="w-full h-full object-cover" loading="lazy" />
                   </div>
-                  <div className="flex-1 py-1 pr-2">
-                    <div className="flex justify-between items-start mb-1">
-                      <h3 className="text-sm font-black uppercase italic tracking-tight leading-tight">{item.name}</h3>
-                      {item.salePrice && <span className="bg-orange-100 text-orange-600 text-[7px] font-black px-2 py-0.5 rounded-full uppercase">Sale</span>}
+                  <div className="flex-1 py-1 pr-2 flex flex-col justify-between h-full">
+                    <div>
+                      <div className="flex justify-between items-start mb-1">
+                        <h3 className="text-sm font-black uppercase italic tracking-tight leading-tight">{item.name}</h3>
+                        {item.salePrice && <span className="bg-orange-100 text-[7px] font-black px-2 py-0.5 rounded-full uppercase" style={{ color: settings.primaryColor }}>Sale</span>}
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-bold mb-3 line-clamp-2">{item.desc || "Prepared fresh daily."}</p>
                     </div>
-                    <p className="text-[10px] text-slate-400 font-bold mb-3 line-clamp-1">{item.desc || "Prepared fresh daily."}</p>
                     
                     <div className="flex justify-between items-end">
                       <div>
@@ -417,14 +447,14 @@ export default function App() {
                       
                       {cart[item.id] ? (
                         <div className="flex items-center bg-slate-900 text-white rounded-xl p-0.5 scale-90 origin-right">
-                          <button onClick={() => removeFromCart(item.id)} className="w-8 h-8 font-black">－</button>
+                          <button onClick={() => removeFromCart(item.id)} className="w-8 h-8 font-black hover:bg-slate-800 rounded-lg">－</button>
                           <span className="w-6 text-center font-black text-[11px]">{cart[item.id]}</span>
-                          <button onClick={() => addToCart(item)} className="w-8 h-8 font-black">＋</button>
+                          <button onClick={() => addToCart(item)} className="w-8 h-8 font-black hover:bg-slate-800 rounded-lg">＋</button>
                         </div>
                       ) : (
                         <button 
                           onClick={() => addToCart(item)} 
-                          className="px-4 py-2 bg-slate-50 rounded-xl font-black uppercase text-[9px] tracking-wider border border-slate-100 active:bg-black active:text-white transition-colors"
+                          className="px-4 py-2 bg-slate-50 rounded-xl font-black uppercase text-[9px] tracking-wider border border-slate-100 active:bg-black active:text-white hover:bg-slate-100 transition-colors"
                         >
                           Add +
                         </button>
@@ -441,7 +471,7 @@ export default function App() {
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-sm px-4">
               <button 
                 onClick={() => setIsCheckoutOpen(true)} 
-                className="w-full bg-slate-950 text-white p-2 rounded-full shadow-2xl flex items-center justify-between"
+                className="w-full bg-slate-950 text-white p-2 rounded-full shadow-2xl flex items-center justify-between hover:scale-[1.02] transition-transform"
               >
                 <div className="flex items-center gap-3 pl-2">
                   <div className="w-12 h-12 rounded-full flex items-center justify-center font-black text-lg" style={{ backgroundColor: settings.primaryColor }}>
@@ -449,33 +479,79 @@ export default function App() {
                   </div>
                   <div className="text-left">
                     <p className="text-[11px] font-black">{cartTotal.toLocaleString()} IQD</p>
-                    <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">In your tray</p>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">In your tray</p>
                   </div>
                 </div>
-                <div className="pr-6 font-black text-[10px] uppercase tracking-[0.2em]">Checkout →</div>
+                <div className="pr-6 font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2">
+                  Checkout <span className="text-lg leading-none">→</span>
+                </div>
               </button>
             </div>
           )}
 
-          {/* Checkout Modal */}
+          {/* 🚀 UPGRADED CHECKOUT MODAL */}
           {isCheckoutOpen && (
-            <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-              <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 animate-in slide-in-from-bottom-20">
-                <h2 className="text-2xl font-black italic uppercase mb-4 tracking-tighter">Where to send?</h2>
-                <textarea 
-                  value={address} 
-                  onChange={e => setAddress(e.target.value)} 
-                  className="w-full p-5 bg-slate-50 rounded-2xl text-sm h-28 mb-6 outline-none border border-slate-100 focus:border-orange-500 font-bold" 
-                  placeholder="Street / Building / House No." 
-                />
+            <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 sm:p-6 overflow-y-auto">
+              <div className="bg-white w-full max-w-md rounded-[2.5rem] p-6 sm:p-8 animate-in slide-in-from-bottom-20 my-auto shadow-2xl">
+                
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-black italic uppercase tracking-tighter">Complete Order</h2>
+                  <button onClick={() => setIsCheckoutOpen(false)} className="w-8 h-8 bg-slate-100 text-slate-500 rounded-full font-bold flex items-center justify-center hover:bg-slate-200">×</button>
+                </div>
+
+                {/* Order Summary */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-6">
+                  <h3 className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Your Items</h3>
+                  <div className="max-h-32 overflow-y-auto no-scrollbar space-y-2 mb-3">
+                    {Object.entries(cart).map(([id, q]) => {
+                      const item = menuItems.find(m => m.id === id);
+                      if (!item) return null;
+                      return (
+                        <div key={id} className="flex justify-between items-center text-sm font-bold">
+                          <span><span className="text-slate-400 mr-2">{q}x</span> {item.name}</span>
+                          <span>{((item.salePrice || item.price) * q).toLocaleString()}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="flex justify-between items-center pt-3 border-t border-slate-200">
+                    <span className="text-xs font-black uppercase">Total:</span>
+                    <span className="text-lg font-black" style={{ color: settings.primaryColor }}>{cartTotal.toLocaleString()} IQD</span>
+                  </div>
+                </div>
+
+                {/* Customer Details Form */}
+                <div className="space-y-3 mb-6">
+                  <input 
+                    type="text"
+                    value={customerName} 
+                    onChange={e => setCustomerName(e.target.value)} 
+                    className="w-full p-4 bg-slate-50 rounded-2xl text-sm outline-none border border-slate-100 focus:border-slate-300 font-bold placeholder:text-slate-400" 
+                    placeholder="Your Full Name" 
+                  />
+                  <input 
+                    type="tel"
+                    value={customerPhone} 
+                    onChange={e => setCustomerPhone(e.target.value)} 
+                    className="w-full p-4 bg-slate-50 rounded-2xl text-sm outline-none border border-slate-100 focus:border-slate-300 font-bold placeholder:text-slate-400" 
+                    placeholder="Phone Number (e.g. 078...)" 
+                  />
+                  <textarea 
+                    value={address} 
+                    onChange={e => setAddress(e.target.value)} 
+                    className="w-full p-4 bg-slate-50 rounded-2xl text-sm h-24 outline-none border border-slate-100 focus:border-slate-300 font-bold placeholder:text-slate-400 resize-none" 
+                    placeholder="Delivery Address (Street / Building / House No.)" 
+                  />
+                </div>
+
                 <button 
-                  disabled={!address.trim()} 
+                  disabled={!address.trim() || !customerName.trim() || !customerPhone.trim()} 
                   onClick={handleCheckout} 
-                  className="w-full py-5 bg-[#25D366] text-white font-black rounded-2xl text-[10px] uppercase tracking-widest disabled:opacity-50"
+                  className="w-full py-5 bg-[#25D366] text-white font-black rounded-2xl text-[10px] uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#20bd5a] transition-colors shadow-lg shadow-[#25D366]/30"
                 >
-                  Send to WhatsApp
+                  Send Order via WhatsApp
                 </button>
-                <button onClick={() => setIsCheckoutOpen(false)} className="w-full mt-4 text-slate-400 font-black text-[9px] uppercase tracking-widest">Cancel</button>
+                
               </div>
             </div>
           )}
