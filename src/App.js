@@ -21,28 +21,16 @@ import {
 } from "firebase/auth";
 
 // --- FIREBASE CONFIG ---
-const localConfig = {
-  apiKey: "AIzaSyBi9O20ep4sQEfAQSvQAexHzzT1wjj8cHc",
-  authDomain: "karbala-burger-app.firebaseapp.com",
-  projectId: "karbala-burger-app",
-  storageBucket: "karbala-burger-app.firebasestorage.app",
-  messagingSenderId: "112064338237",
-  appId: "1:112064338237:web:93b7154a4504704d82cd54",
-};
-
-const firebaseConfig = typeof window !== 'undefined' && window.__firebase_config 
-  ? JSON.parse(window.__firebase_config) 
-  : localConfig;
-
+const firebaseConfig = JSON.parse(__firebase_config);
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 // 🛡️ MOBILE FIX: Enable persistent cache with aggressive synchronization
 const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 
-const APP_ID_PERMANENT = "karbala-burger-pro-v1";
 const OWNER_PASSWORD = "KarbalaGrill2024"; 
 
 export default function App() {
@@ -96,13 +84,12 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [isDataLoaded, menuItems]);
 
-  // 1. AUTHENTICATION
+  // 1. AUTHENTICATION (RULE 3)
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const token = typeof window !== 'undefined' ? window.__initial_auth_token : null;
-        if (token && token !== "") {
-          await signInWithCustomToken(auth, token);
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
         } else {
           await signInAnonymously(auth);
         }
@@ -114,19 +101,18 @@ export default function App() {
 
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, (u) => {
-      if (u) {
-        setUser(u);
-        setAuthStatus("Online");
-      }
+      setUser(u);
+      if (u) setAuthStatus("Online");
     });
     return () => unsubscribe();
   }, []);
 
-  // 2. DATA SYNC
+  // 2. DATA SYNC (RULE 1 & 3)
   useEffect(() => {
-    if (!user) return;
+    if (!user) return; // Guard every Firestore operation (RULE 3)
 
-    const menuRef = collection(db, 'artifacts', APP_ID_PERMANENT, 'public', 'data', 'menu');
+    // Using the Mandatory Path Structure (RULE 1)
+    const menuRef = collection(db, 'artifacts', appId, 'public', 'data', 'menu');
     
     // Explicitly try a one-time fetch to "kickstart" the mobile connection
     const kickstart = async () => {
@@ -159,14 +145,13 @@ export default function App() {
       }
     }, (err) => {
       console.error("Firestore Error:", err);
-      // Don't show error if we have backup items on screen
       if (menuItems.length === 0) setDbError("Network issue. Reconnecting...");
     });
 
-    const settingsRef = doc(db, 'artifacts', APP_ID_PERMANENT, 'public', 'data', 'settings', 'global');
+    const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
     const unsubSettings = onSnapshot(settingsRef, (snap) => {
       if (snap.exists()) setSettings(prev => ({ ...prev, ...snap.data() }));
-    });
+    }, (err) => console.error("Settings error:", err));
 
     return () => { unsubMenu(); unsubSettings(); };
   }, [user]);
@@ -177,6 +162,7 @@ export default function App() {
     try {
       await action();
     } catch (e) {
+      console.error("Write error:", e);
       setDbError("Save failed. Try again.");
       setIsSaving(false);
     }
@@ -187,7 +173,7 @@ export default function App() {
     const id = "item_" + Date.now();
     pendingIdRef.current = id;
     safeWrite(async () => {
-      await setDoc(doc(db, 'artifacts', APP_ID_PERMANENT, 'public', 'data', 'menu', id), {
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id), {
         ...newItem,
         id,
         price: Number(newItem.price),
@@ -198,7 +184,7 @@ export default function App() {
   };
 
   const deleteItem = (id) => safeWrite(async () => {
-    await deleteDoc(doc(db, 'artifacts', APP_ID_PERMANENT, 'public', 'data', 'menu', id));
+    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id));
     setIsSaving(false);
   });
 
