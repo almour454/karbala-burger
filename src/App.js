@@ -66,6 +66,20 @@ const getOwnerDoc = () => doc(db, 'artifacts', appId, 'private', 'data', 'admin'
 
 const PLACEHOLDER = "https://images.unsplash.com/photo-1550547660-d9450f859349?q=80&w=200&auto=format&fit=crop";
 
+const digitsOnly = (raw) => String(raw || "").replace(/\D/g, "");
+
+const contactPhonesList = (s) =>
+  [s?.contactPhone1, s?.contactPhone2, s?.contactPhone3].filter((x) => {
+    const d = digitsOnly(x);
+    return d.length >= 6;
+  });
+
+const toTelHref = (raw) => {
+  const d = digitsOnly(raw);
+  if (!d) return "#";
+  return `tel:+${d}`;
+};
+
 export default function App() {
   const [view, setView] = useState("customer"); 
   const [user, setUser] = useState(null);
@@ -87,7 +101,10 @@ export default function App() {
     checkoutNote: "يرجى التأكد من الاسم ورقم الهاتف قبل إرسال الطلب.",
     dealsSectionTitle: "عروض نارية 🔥",
     cartDeliveryNote: "رسوم التوصيل حسب المنطقة — لا تُضاف تلقائيًا للمجموع.",
-    deliveryFee: 0
+    deliveryFee: 0,
+    contactPhone1: "",
+    contactPhone2: "",
+    contactPhone3: ""
   });
 
   const [cart, setCart] = useState({});
@@ -386,6 +403,14 @@ export default function App() {
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="Facebook URL" value={settings.facebookUrl || ""} onChange={e => updateGlobalSettings("facebookUrl", e.target.value)} />
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="Instagram URL" value={settings.instagramUrl || ""} onChange={e => updateGlobalSettings("instagramUrl", e.target.value)} />
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2" placeholder="TikTok URL" value={settings.tiktokUrl || ""} onChange={e => updateGlobalSettings("tiktokUrl", e.target.value)} />
+                <div className="md:col-span-2 bg-black/30 border border-white/10 rounded-2xl p-4">
+                  <p className="text-orange-400 text-[10px] font-black uppercase tracking-wider mb-3">أرقام اتصال اختيارية (تظهر بجانب السوشال)</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <input className="bg-black/40 border border-white/5 p-3 rounded-xl text-white text-sm" placeholder="هاتف 1 (964...)" value={settings.contactPhone1 || ""} onChange={e => updateGlobalSettings("contactPhone1", e.target.value)} />
+                    <input className="bg-black/40 border border-white/5 p-3 rounded-xl text-white text-sm" placeholder="هاتف 2 (اختياري)" value={settings.contactPhone2 || ""} onChange={e => updateGlobalSettings("contactPhone2", e.target.value)} />
+                    <input className="bg-black/40 border border-white/5 p-3 rounded-xl text-white text-sm" placeholder="هاتف 3 (اختياري)" value={settings.contactPhone3 || ""} onChange={e => updateGlobalSettings("contactPhone3", e.target.value)} />
+                  </div>
+                </div>
                 <textarea className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2 h-24 resize-none" placeholder="رسالة تظهر عند متابعة الطلب" value={settings.checkoutNote || ""} onChange={e => updateGlobalSettings("checkoutNote", e.target.value)} />
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2" placeholder="عنوان قسم الخصومات (مثال: عروض نارية 🔥)" value={settings.dealsSectionTitle || ""} onChange={e => updateGlobalSettings("dealsSectionTitle", e.target.value)} />
                 <textarea className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2 h-20 resize-none" placeholder="ملاحظة بجانب السعر (توصيل، مناطق، إلخ)" value={settings.cartDeliveryNote || ""} onChange={e => updateGlobalSettings("cartDeliveryNote", e.target.value)} />
@@ -514,31 +539,60 @@ export default function App() {
                    <span className="text-[11px] font-black uppercase tracking-widest">{settings.openingHours}</span>
                 </div>
                 <div className="text-[12px] font-black text-slate-900/40 uppercase tracking-tighter" dir="rtl">📍 {settings.locationDesc}</div>
-                <div className="flex items-center gap-2">
-                  {settings.facebookUrl && (
-                    <a href={settings.facebookUrl} target="_blank" rel="noreferrer" aria-label="Facebook" title="Facebook" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#1877F2] hover:border-[#1877F2]/30 hover:shadow-md transition-all flex items-center justify-center">
-                      <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 fill-current">
-                        <path d="M13.5 8.5V6.8c0-.8.5-1.1 1.2-1.1H16V3h-2.1C11.6 3 10.5 4.4 10.5 6.2v2.3H9v2.8h1.5V21h3V11.3h2.1l.3-2.8h-2.4z" />
-                      </svg>
-                    </a>
-                  )}
-                  {settings.instagramUrl && (
-                    <a href={settings.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram" title="Instagram" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#E1306C] hover:border-[#E1306C]/30 hover:shadow-md transition-all flex items-center justify-center">
-                      <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 stroke-current fill-none" strokeWidth="2">
-                        <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
-                        <circle cx="12" cy="12" r="4" />
-                        <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
-                      </svg>
-                    </a>
-                  )}
-                  {settings.tiktokUrl && (
-                    <a href={settings.tiktokUrl} target="_blank" rel="noreferrer" aria-label="TikTok" title="TikTok" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#00F2EA] hover:border-[#00F2EA]/30 hover:shadow-md transition-all flex items-center justify-center">
-                      <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 fill-current">
-                        <path d="M14.8 3h2.6c.2 1.5 1.3 2.8 2.6 3.3v2.7c-1.3 0-2.6-.4-3.7-1.1v6.3c0 3-2.4 5.4-5.4 5.4a5.4 5.4 0 1 1 0-10.8c.3 0 .6 0 .9.1v2.7a2.8 2.8 0 1 0 1.9 2.7V3z" />
-                      </svg>
-                    </a>
-                  )}
-                </div>
+                {(() => {
+                  const phones = contactPhonesList(settings);
+                  const hasSocial = settings.facebookUrl || settings.instagramUrl || settings.tiktokUrl;
+                  if (!hasSocial && phones.length === 0) return null;
+                  return (
+                    <div className="mt-2 flex flex-col items-center gap-3 w-full max-w-lg mx-auto px-2">
+                      {hasSocial && (
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        {settings.facebookUrl && (
+                          <a href={settings.facebookUrl} target="_blank" rel="noreferrer" aria-label="Facebook" title="Facebook" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#1877F2] hover:border-[#1877F2]/30 hover:shadow-md transition-all flex items-center justify-center">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                              <path d="M13.5 8.5V6.8c0-.8.5-1.1 1.2-1.1H16V3h-2.1C11.6 3 10.5 4.4 10.5 6.2v2.3H9v2.8h1.5V21h3V11.3h2.1l.3-2.8h-2.4z" />
+                            </svg>
+                          </a>
+                        )}
+                        {settings.instagramUrl && (
+                          <a href={settings.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram" title="Instagram" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#E1306C] hover:border-[#E1306C]/30 hover:shadow-md transition-all flex items-center justify-center">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 stroke-current fill-none" strokeWidth="2">
+                              <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
+                              <circle cx="12" cy="12" r="4" />
+                              <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+                            </svg>
+                          </a>
+                        )}
+                        {settings.tiktokUrl && (
+                          <a href={settings.tiktokUrl} target="_blank" rel="noreferrer" aria-label="TikTok" title="TikTok" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#00F2EA] hover:border-[#00F2EA]/30 hover:shadow-md transition-all flex items-center justify-center">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                              <path d="M14.8 3h2.6c.2 1.5 1.3 2.8 2.6 3.3v2.7c-1.3 0-2.6-.4-3.7-1.1v6.3c0 3-2.4 5.4-5.4 5.4a5.4 5.4 0 1 1 0-10.8c.3 0 .6 0 .9.1v2.7a2.8 2.8 0 1 0 1.9 2.7V3z" />
+                            </svg>
+                          </a>
+                        )}
+                      </div>
+                      )}
+                      {phones.length > 0 && (
+                        <div className={`flex flex-wrap items-center justify-center gap-2 w-full ${hasSocial ? "border-t border-black/5 pt-3" : "pt-1"}`}>
+                          <span className="w-full text-center text-[9px] font-black uppercase tracking-widest text-slate-400">اتصل بنا</span>
+                          {phones.map((num, idx) => (
+                            <a
+                              key={`${digitsOnly(num)}-${idx}`}
+                              href={toTelHref(num)}
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white border border-black/10 text-slate-800 text-[11px] font-black shadow-sm hover:shadow-md hover:border-slate-300 transition-all"
+                              dir="ltr"
+                            >
+                              <svg aria-hidden="true" viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path strokeLinecap="round" d="M5 4h3l2 5-2 1a10 10 0 006 6l1-2 5 2v3a2 2 0 01-2 2A17 17 0 013 6a2 2 0 012-2z" />
+                              </svg>
+                              <span className="tabular-nums tracking-tight">{digitsOnly(num) || num}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
              </div>
           </header>
 
