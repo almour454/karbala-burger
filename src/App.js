@@ -50,6 +50,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [dbError, setDbError] = useState(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // 🚀 STATE
   const [menuItems, setMenuItems] = useState([]);
@@ -119,8 +120,11 @@ export default function App() {
     if (!user) return;
     setIsSaving(true);
     setDbError(null);
+    setSaveSuccess(false);
     try {
       await actionFn();
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (e) {
       setDbError(e.message);
       console.error(e);
@@ -186,6 +190,19 @@ export default function App() {
     return acc;
   }, {}), [categories, menuItems]);
 
+  const handleCheckout = () => {
+    const orderItems = Object.entries(cart).map(([id, q]) => {
+      const item = menuItems.find(m => m.id === id);
+      return `• ${q}x ${item?.name}`;
+    }).join('\n');
+    
+    const message = `*NEW ORDER FROM ${settings.restaurantName}*\n\n${orderItems}\n\n*Total:* ${cartTotal.toLocaleString()} IQD\n*Address:* ${address}`;
+    const encoded = encodeURIComponent(message);
+    window.open(`https://wa.me/${settings.whatsapp}?text=${encoded}`, '_blank');
+    setCart({});
+    setIsCheckoutOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans antialiased text-slate-900">
       {/* 🚨 ERROR TOAST */}
@@ -194,6 +211,14 @@ export default function App() {
           <p className="text-[10px] font-black uppercase mb-1">Database Error</p>
           <p className="text-xs font-bold leading-tight">{dbError}</p>
           <button onClick={() => setDbError(null)} className="mt-2 text-[10px] underline font-black">Dismiss</button>
+        </div>
+      )}
+
+      {/* ✅ SUCCESS TOAST */}
+      {saveSuccess && (
+        <div className="fixed bottom-4 right-4 z-[3000] bg-green-600 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3">
+          <span className="text-lg">✨</span>
+          <p className="text-xs font-black uppercase tracking-widest">Changes Saved!</p>
         </div>
       )}
 
