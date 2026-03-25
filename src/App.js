@@ -543,9 +543,17 @@ export default function App() {
                           </span>
                         </div>
                         <h3 className="text-lg font-black uppercase leading-tight mb-5 tracking-tight text-right">{item.name}</h3>
-                        <div className="flex justify-between items-end">
-                           <button type="button" onClick={() => addToCart(item)} className="bg-white w-9 h-9 rounded-full flex items-center justify-center font-black shadow-lg text-base text-black hover:scale-110 active:scale-95 transition-transform deal-add-btn">＋</button>
-                           <div className="text-right">
+                        <div className="flex justify-between items-end gap-2 mb-3">
+                          {cart[item.id] ? (
+                            <div className="flex items-center bg-white rounded-xl p-1 shadow-lg shrink-0">
+                              <button type="button" onClick={() => removeFromCart(item.id)} className="w-8 h-8 font-black text-slate-900 hover:bg-slate-100 rounded-lg leading-none">－</button>
+                              <span className="w-7 text-center font-black text-xs text-slate-900">{cart[item.id]}</span>
+                              <button type="button" onClick={() => addToCart(item)} className="w-8 h-8 font-black text-slate-900 hover:bg-slate-100 rounded-lg leading-none">＋</button>
+                            </div>
+                          ) : (
+                            <button type="button" onClick={() => addToCart(item)} className="shrink-0 px-4 py-2.5 bg-white text-black rounded-xl font-black text-[10px] uppercase shadow-lg hover:scale-105 active:scale-95 transition-transform deal-add-btn">إضافة +</button>
+                          )}
+                           <div className="text-right min-w-0">
                              <p className="text-lg sm:text-xl font-black mb-1 text-amber-200 leading-tight">
                                <span className="old-price-fancy old-price-hot">{Number(item.price || 0).toLocaleString()}</span>
                                <span className="mr-1 text-amber-100">د.ع</span>
@@ -583,16 +591,29 @@ export default function App() {
                       <h3 className="text-lg font-black text-slate-900 leading-tight mb-1">{item.name}</h3>
                       <p className="text-[10px] text-slate-400 font-bold leading-tight">{item.desc || "طعم لا ينسى"}</p>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <p className="font-black text-lg tracking-tighter" style={{ color: settings.primaryColor }}>{(item.salePrice || item.price).toLocaleString()} <span className="text-[10px]">د.ع</span></p>
-                      {cart[item.id] ? (
-                        <div className="flex items-center bg-slate-100 rounded-xl p-1">
-                          <button onClick={() => removeFromCart(item.id)} className="w-8 h-8 font-black hover:bg-white rounded-lg">－</button>
-                          <span className="w-6 text-center font-black text-xs">{cart[item.id]}</span>
-                          <button onClick={() => addToCart(item)} className="w-8 h-8 font-black hover:bg-white rounded-lg">＋</button>
+                    <div className="flex justify-between items-end gap-2">
+                      {item.salePrice != null && Number(item.salePrice) < Number(item.price) ? (
+                        <div className="flex flex-col items-start gap-0.5 min-w-0">
+                          <p className="text-[11px] font-black text-slate-400 leading-tight">
+                            <span className="line-through decoration-2 decoration-red-500 decoration-skip-ink-none">{Number(item.price || 0).toLocaleString()}</span>
+                            <span className="text-[9px] mr-0.5"> د.ع</span>
+                          </p>
+                          <p className="font-black text-lg tracking-tighter leading-tight" style={{ color: settings.primaryColor }}>
+                            {Number(item.salePrice).toLocaleString()} <span className="text-[10px]">د.ع</span>
+                          </p>
+                          <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 mt-0.5">عرض 🔥</span>
                         </div>
                       ) : (
-                        <button onClick={() => addToCart(item)} className="px-5 py-2.5 bg-black text-white rounded-xl font-black text-[10px] uppercase">إضافة +</button>
+                        <p className="font-black text-lg tracking-tighter self-end" style={{ color: settings.primaryColor }}>{Number(item.price || 0).toLocaleString()} <span className="text-[10px]">د.ع</span></p>
+                      )}
+                      {cart[item.id] ? (
+                        <div className="flex items-center bg-slate-100 rounded-xl p-1 shrink-0">
+                          <button type="button" onClick={() => removeFromCart(item.id)} className="w-8 h-8 font-black hover:bg-white rounded-lg leading-none">－</button>
+                          <span className="w-6 text-center font-black text-xs">{cart[item.id]}</span>
+                          <button type="button" onClick={() => addToCart(item)} className="w-8 h-8 font-black hover:bg-white rounded-lg leading-none">＋</button>
+                        </div>
+                      ) : (
+                        <button type="button" onClick={() => addToCart(item)} className="px-5 py-2.5 bg-black text-white rounded-xl font-black text-[10px] uppercase shrink-0">إضافة +</button>
                       )}
                     </div>
                   </div>
