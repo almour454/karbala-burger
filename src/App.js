@@ -78,7 +78,7 @@ export default function App() {
   const [passInput, setPassInput] = useState("");
   const [showError, setShowError] = useState(false);
 
-  const [newItem, setNewItem] = useState({ name: "", price: "", salePrice: "", desc: "", image: "", category: "برجر" });
+  const [newItem, setNewItem] = useState({ name: "", price: "", salePrice: "", desc: "", image: "", category: "برجر", isVisible: true });
   const [saveStatus, setSaveStatus] = useState("");
 
   useEffect(() => {
@@ -151,14 +151,24 @@ export default function App() {
         id,
         price: Number(newItem.price) || 0,
         salePrice: newItem.salePrice ? Number(newItem.salePrice) : null,
+        isVisible: newItem.isVisible !== undefined ? newItem.isVisible : true,
         createdAt: new Date().toISOString()
       });
-      setNewItem({ name: "", price: "", salePrice: "", desc: "", image: "", category: newItem.category });
+      setNewItem({ name: "", price: "", salePrice: "", desc: "", image: "", category: newItem.category, isVisible: true });
       setSaveStatus("تم الحفظ بنجاح! ✅");
       setTimeout(() => setSaveStatus(""), 3000);
     } catch (e) {
       setSaveStatus("خطأ في الحفظ ❌");
     }
+  };
+
+  const toggleVisibility = async (item) => {
+    if (!user) return;
+    const newStatus = item.isVisible === false ? true : false;
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', item.id), {
+        ...item,
+        isVisible: newStatus
+    });
   };
 
   const handleDeleteItem = async (id) => {
@@ -179,12 +189,13 @@ export default function App() {
   }, 0), [cart, menuItems]);
 
   const filteredItems = useMemo(() => {
-    if (activeCategory === "الكل") return menuItems;
-    return menuItems.filter(item => item.category === activeCategory);
+    const items = activeCategory === "الكل" ? menuItems : menuItems.filter(item => item.category === activeCategory);
+    // ONLY show visible items to customers
+    return items.filter(i => i.isVisible !== false);
   }, [menuItems, activeCategory]);
 
   const discountItems = useMemo(() => {
-    return menuItems.filter(item => item.salePrice && item.salePrice < item.price);
+    return menuItems.filter(item => item.salePrice && item.salePrice < item.price && item.isVisible !== false);
   }, [menuItems]);
 
   const sendWhatsApp = () => {
@@ -199,7 +210,7 @@ export default function App() {
   return (
     <div className="min-h-screen transition-colors duration-500" style={{ backgroundColor: settings.bgColor, fontFamily: 'sans-serif' }}>
       
-      {/* NAVIGATION - Now Static (Not Sticky) */}
+      {/* NAVIGATION - Static */}
       <div className="flex justify-center p-4">
         <div className="flex bg-black/90 backdrop-blur-md p-1 rounded-full border border-white/10 shadow-2xl">
           <button onClick={() => navigateTo("customer")} className={`px-8 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'customer' ? 'text-white shadow-lg' : 'text-slate-500'}`} style={view === 'customer' ? { backgroundColor: settings.primaryColor } : {}}>المنيو</button>
@@ -267,7 +278,7 @@ export default function App() {
               </div>
             </section>
 
-            {/* VISUAL LIST */}
+            {/* VISUAL LIST WITH HIDE TOGGLE */}
             <section className="bg-slate-900 rounded-[2.5rem] p-8 border border-white/10 shadow-xl">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em]">قائمة الوجبات الحالية</h3>
@@ -276,17 +287,22 @@ export default function App() {
               
               <div className="grid grid-cols-1 gap-3">
                 {menuItems.map(item => (
-                    <div key={item.id} className="bg-black/40 p-3 rounded-2xl border border-white/5 flex items-center justify-between group hover:border-white/20 transition-all">
+                    <div key={item.id} className={`bg-black/40 p-3 rounded-2xl border transition-all flex items-center justify-between group ${item.isVisible === false ? 'border-red-500/20 opacity-60' : 'border-white/5 hover:border-white/20'}`}>
                       <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-800 shadow-inner">
+                        <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-800 shadow-inner relative">
                             <img 
                                 src={item.image || PLACEHOLDER} 
-                                className="w-full h-full object-cover" 
+                                className={`w-full h-full object-cover ${item.isVisible === false ? 'grayscale' : ''}`} 
                                 onError={(e) => e.target.src = PLACEHOLDER}
                             />
+                            {item.isVisible === false && (
+                                <div className="absolute inset-0 bg-red-600/40 flex items-center justify-center">
+                                    <span className="text-[8px] text-white font-black uppercase">Hidden</span>
+                                </div>
+                            )}
                         </div>
                         <div>
-                          <p className="text-white font-bold text-sm mb-0.5">{item.name}</p>
+                          <p className={`text-white font-bold text-sm mb-0.5 ${item.isVisible === false ? 'line-through opacity-50' : ''}`}>{item.name}</p>
                           <div className="flex items-center gap-2">
                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-white/5 text-white/40">{item.category}</span>
                              <span className="text-[10px] font-black text-orange-500">{item.price.toLocaleString()} د.ع</span>
@@ -294,7 +310,20 @@ export default function App() {
                         </div>
                       </div>
                       
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-2">
+                        {/* HIDE / SHOW TOGGLE */}
+                        <button 
+                            onClick={() => toggleVisibility(item)} 
+                            title={item.isVisible === false ? "Show Item" : "Hide Item"}
+                            className={`p-3 rounded-xl transition-all ${item.isVisible === false ? 'bg-orange-500/20 text-orange-500' : 'bg-white/5 text-white/40 hover:text-white'}`}
+                        >
+                            {item.isVisible === false ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                            )}
+                        </button>
+                        
                         <button onClick={() => { setNewItem({...item}); document.getElementById('item-form').scrollIntoView({ behavior: 'smooth' }); }} className="text-white/40 hover:text-white p-3 text-[10px] font-black uppercase">تعديل</button>
                         <button onClick={() => { if(window.confirm(`حذف ${item.name}؟`)) handleDeleteItem(item.id); }} className="bg-red-500/10 text-red-500 px-4 py-2 rounded-xl hover:bg-red-500 hover:text-white transition-all text-[10px] font-black uppercase">حذف</button>
                       </div>
@@ -347,7 +376,7 @@ export default function App() {
             </section>
           )}
 
-          {/* CATEGORIES - Not Sticky anymore */}
+          {/* CATEGORIES */}
           <div className="py-4 bg-transparent">
             <div className="max-w-6xl mx-auto flex gap-2 px-6 overflow-x-auto no-scrollbar justify-start md:justify-center" dir="rtl">
               <button onClick={() => setActiveCategory("الكل")} className={`shrink-0 px-8 py-3.5 rounded-2xl text-[12px] font-black transition-all ${activeCategory === "الكل" ? 'bg-black text-white shadow-xl' : 'bg-white text-slate-400 border border-black/5'}`}>الكل</button>
