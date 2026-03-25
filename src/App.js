@@ -7,7 +7,9 @@ import {
   setDoc, 
   deleteDoc,
   onSnapshot,
-  enableIndexedDbPersistence
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager
 } from "firebase/firestore"; 
 import { 
   getAuth, 
@@ -32,10 +34,12 @@ const firebaseConfig = typeof window !== 'undefined' && window.__firebase_config
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
 
-// 🛡️ PERMANENT ID - This is your "Serial Number". Do not change this.
-// It ensures the site always finds your burgers.
+// 🛡️ MOBILE FIX: Enable persistent cache so the phone stores the menu locally
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+});
+
 const APP_ID_PERMANENT = "karbala-burger-pro-v1";
 const OWNER_PASSWORD = "KarbalaGrill2024"; 
 
@@ -48,10 +52,10 @@ export default function App() {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const pendingIdRef = useRef(null);
 
-  // App State
+  // App State - Loaded from local backup instantly
   const [menuItems, setMenuItems] = useState(() => {
-    // Try to load from backup immediately so the screen isn't blank
-    const backup = typeof window !== 'undefined' ? localStorage.getItem("karbala_menu_backup") : null;
+    if (typeof window === 'undefined') return [];
+    const backup = localStorage.getItem("karbala_menu_backup");
     return backup ? JSON.parse(backup) : [];
   });
 
@@ -74,7 +78,6 @@ export default function App() {
   const [passInput, setPassInput] = useState("");
   const [newItem, setNewItem] = useState({ name: "", price: "", salePrice: "", desc: "", image: "", category: "Burgers" });
 
-  // Save cart and menu backup to device
   useEffect(() => {
     localStorage.setItem("karbala_cart", JSON.stringify(cart));
     if (menuItems.length > 0) {
@@ -82,7 +85,7 @@ export default function App() {
     }
   }, [cart, menuItems]);
 
-  // 1. AUTHENTICATION (RULE 3)
+  // 1. AUTHENTICATION
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -107,27 +110,29 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. DATA SYNC (RULE 1)
+  // 2. DATA SYNC
   useEffect(() => {
     if (!user) return;
 
     const menuRef = collection(db, 'artifacts', APP_ID_PERMANENT, 'public', 'data', 'menu');
     
-    // onSnapshot is "Real-time" - it keeps the items on the screen as long as the app is open
-    const unsubMenu = onSnapshot(menuRef, (snap) => {
+    const unsubMenu = onSnapshot(menuRef, { includeMetadataChanges: true }, (snap) => {
       const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setMenuItems(items);
-      setIsDataLoaded(true);
-      setDbError(null);
       
+      // Only update if we actually got data (prevents flickering on slow phone networks)
+      if (items.length > 0 || snap.metadata.fromCache === false) {
+        setMenuItems(items);
+        setIsDataLoaded(true);
+      }
+      
+      setDbError(null);
       if (pendingIdRef.current && items.some(i => i.id === pendingIdRef.current)) {
         setIsSaving(false);
         pendingIdRef.current = null;
       }
     }, (err) => {
-      console.error(err);
-      // If internet dies, we don't clear the menu, we just show an error
-      setDbError("Syncing Paused (Check Connection)");
+      console.error("Firestore Error:", err);
+      if (menuItems.length === 0) setDbError("Network Error: Try refreshing");
     });
 
     const settingsRef = doc(db, 'artifacts', APP_ID_PERMANENT, 'public', 'data', 'settings', 'global');
@@ -139,12 +144,12 @@ export default function App() {
   }, [user]);
 
   const safeWrite = async (action) => {
-    if (!user) return setDbError("Login required to save changes.");
+    if (!user) return setDbError("Reconnecting... Please wait.");
     setIsSaving(true);
     try {
       await action();
     } catch (e) {
-      setDbError("Save failed: " + e.message);
+      setDbError("Sync failed. Check connection.");
       setIsSaving(false);
     }
   };
@@ -189,14 +194,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#fafafa] text-[#1a1a1a] font-sans">
-      {/* ⚠️ SYSTEM MESSAGES */}
       {dbError && (
         <div className="fixed top-0 left-0 w-full bg-orange-600 text-white p-2 text-[10px] font-black uppercase text-center z-[9999] shadow-lg">
           {dbError}
         </div>
       )}
 
-      {/* Connection Light */}
       <div className="fixed bottom-4 left-4 z-[9999] flex items-center gap-2 bg-black/80 text-white px-3 py-1.5 rounded-full text-[8px] font-black uppercase border border-white/10">
         <div className={`w-1.5 h-1.5 rounded-full ${authStatus === 'Online' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-red-500 animate-pulse'}`}></div>
         {authStatus}
@@ -217,7 +220,7 @@ export default function App() {
             </div>
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto pt-32 pb-40 px-6 animate-in fade-in duration-500">
+          <div className="max-w-4xl mx-auto pt-32 pb-40 px-6">
             <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 mb-8">
               <h3 className="text-sm font-black uppercase mb-6 opacity-30">Add Product</h3>
               <div className="grid grid-cols-2 gap-3">
@@ -227,24 +230,20 @@ export default function App() {
                   {categories.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <input className="col-span-2 bg-slate-50 p-4 rounded-2xl text-sm font-bold border border-slate-100 outline-none" placeholder="Image URL" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
-                <button onClick={addNewItem} disabled={isSaving || authStatus !== 'Online'} className="col-span-2 py-5 bg-black text-white rounded-2xl font-black uppercase text-[10px] tracking-widest disabled:opacity-30">
-                  {isSaving ? "Syncing to Cloud..." : "Save Product"}
+                <button onClick={addNewItem} disabled={isSaving || authStatus !== 'Online'} className="col-span-2 py-5 bg-black text-white rounded-2xl font-black uppercase text-[10px] tracking-widest">
+                  {isSaving ? "Syncing..." : "Save Product"}
                 </button>
               </div>
             </div>
 
             <div className="space-y-3">
-              <h3 className="text-xs font-black uppercase px-4 opacity-30 tracking-widest">Live Menu Database ({menuItems.length})</h3>
               {menuItems.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).map(item => (
-                <div key={item.id} className="bg-white p-4 rounded-3xl flex items-center justify-between border border-slate-100 shadow-sm">
+                <div key={item.id} className="bg-white p-4 rounded-3xl flex items-center justify-between border border-slate-100">
                   <div className="flex items-center gap-4">
                     <img src={item.image || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=100'} className="w-12 h-12 rounded-xl object-cover" />
-                    <div>
-                      <p className="font-black uppercase text-xs">{item.name}</p>
-                      <p className="text-[10px] text-orange-600 font-bold">{Number(item.price).toLocaleString()} IQD</p>
-                    </div>
+                    <div><p className="font-black uppercase text-xs">{item.name}</p><p className="text-[10px] text-orange-600 font-bold">{Number(item.price).toLocaleString()} IQD</p></div>
                   </div>
-                  <button onClick={() => deleteItem(item.id)} className="px-4 py-2 text-red-500 font-black text-[10px] uppercase hover:bg-red-50 rounded-xl transition-all">Remove</button>
+                  <button onClick={() => deleteItem(item.id)} className="px-4 py-2 text-red-500 font-black text-[10px] uppercase">Remove</button>
                 </div>
               ))}
             </div>
@@ -258,8 +257,8 @@ export default function App() {
           </header>
 
           <main className="max-w-6xl mx-auto px-6">
-            {!isDataLoaded && menuItems.length === 0 ? (
-              <div className="text-center py-20 animate-pulse font-black uppercase text-xs opacity-20 italic">Opening the Grill...</div>
+            {menuItems.length === 0 && !isDataLoaded ? (
+              <div className="text-center py-20 font-black uppercase text-[10px] tracking-widest opacity-20 animate-pulse">Warming the Grill...</div>
             ) : (
               Object.entries(groupedMenu).map(([cat, items]) => (
                 <section key={cat} className="mb-20">
@@ -268,7 +267,7 @@ export default function App() {
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {items.map(item => (
-                      <div key={item.id} className="bg-white rounded-[3rem] p-4 border border-slate-100 shadow-sm group hover:shadow-xl transition-all">
+                      <div key={item.id} className="bg-white rounded-[3rem] p-4 border border-slate-100 shadow-sm group">
                         <div className="aspect-square rounded-[2.5rem] overflow-hidden mb-6 bg-slate-50">
                           <img src={item.image || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=600'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                         </div>
@@ -279,9 +278,9 @@ export default function App() {
                           </div>
                           {cart[item.id] ? (
                             <div className="flex bg-black text-white rounded-2xl p-1 items-center">
-                              <button onClick={() => removeFromCart(item.id)} className="w-12 h-12 flex items-center justify-center font-black text-xl hover:text-orange-500 transition-colors">－</button>
-                              <span className="flex-1 text-center font-black text-xs">{cart[item.id]} IN TRAY</span>
-                              <button onClick={() => addToCart(item)} className="w-12 h-12 flex items-center justify-center font-black text-xl hover:text-orange-500 transition-colors">＋</button>
+                              <button onClick={() => removeFromCart(item.id)} className="w-12 h-12 flex items-center justify-center font-black">－</button>
+                              <span className="flex-1 text-center font-black text-[10px]">{cart[item.id]} IN TRAY</span>
+                              <button onClick={() => addToCart(item)} className="w-12 h-12 flex items-center justify-center font-black">＋</button>
                             </div>
                           ) : (
                             <button onClick={() => addToCart(item)} className="w-full py-4 rounded-2xl bg-slate-50 font-black uppercase text-[10px] tracking-widest hover:bg-black hover:text-white transition-all">Add to Tray</button>
@@ -296,7 +295,7 @@ export default function App() {
           </main>
           
           {cartTotal > 0 && (
-            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-md px-6 z-[2000] animate-in slide-in-from-bottom-20">
+            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-md px-6 z-[2000]">
               <button onClick={() => setIsCheckoutOpen(true)} className="w-full bg-black text-white p-2 rounded-full shadow-2xl flex items-center">
                 <div className="bg-orange-600 h-14 w-14 rounded-full flex items-center justify-center font-black italic">{Object.values(cart).reduce((a,b)=>a+b,0)}</div>
                 <div className="flex-1 px-6 text-left font-black italic">{cartTotal.toLocaleString()} IQD</div>
@@ -307,7 +306,7 @@ export default function App() {
 
           {isCheckoutOpen && (
             <div className="fixed inset-0 z-[3000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
-              <div className="bg-white w-full max-w-lg rounded-[3rem] p-10 animate-in zoom-in-95">
+              <div className="bg-white w-full max-w-lg rounded-[3rem] p-10">
                 <h2 className="text-3xl font-black italic uppercase mb-6">Confirm Order</h2>
                 <textarea className="w-full p-6 bg-slate-50 rounded-2xl h-32 mb-6 outline-none font-bold" placeholder="Delivery Address / Phone..." value={address} onChange={e => setAddress(e.target.value)} />
                 <button onClick={() => {
