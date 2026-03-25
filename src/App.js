@@ -382,18 +382,26 @@ export default function App() {
                 <div className="text-[12px] font-black text-slate-900/40 uppercase tracking-tighter" dir="rtl">📍 {settings.locationDesc}</div>
                 <div className="flex items-center gap-2">
                   {settings.facebookUrl && (
-                    <a href={settings.facebookUrl} target="_blank" rel="noreferrer" aria-label="Facebook" title="Facebook" className="w-10 h-10 rounded-full bg-white border border-black/10 text-[16px] font-black text-slate-700 hover:text-black hover:shadow-md transition-all flex items-center justify-center">
-                      <span aria-hidden="true">f</span>
+                    <a href={settings.facebookUrl} target="_blank" rel="noreferrer" aria-label="Facebook" title="Facebook" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#1877F2] hover:border-[#1877F2]/30 hover:shadow-md transition-all flex items-center justify-center">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                        <path d="M13.5 8.5V6.8c0-.8.5-1.1 1.2-1.1H16V3h-2.1C11.6 3 10.5 4.4 10.5 6.2v2.3H9v2.8h1.5V21h3V11.3h2.1l.3-2.8h-2.4z" />
+                      </svg>
                     </a>
                   )}
                   {settings.instagramUrl && (
-                    <a href={settings.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram" title="Instagram" className="w-10 h-10 rounded-full bg-white border border-black/10 text-[15px] font-black text-slate-700 hover:text-black hover:shadow-md transition-all flex items-center justify-center">
-                      <span aria-hidden="true">◎</span>
+                    <a href={settings.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram" title="Instagram" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#E1306C] hover:border-[#E1306C]/30 hover:shadow-md transition-all flex items-center justify-center">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 stroke-current fill-none" strokeWidth="2">
+                        <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
+                        <circle cx="12" cy="12" r="4" />
+                        <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+                      </svg>
                     </a>
                   )}
                   {settings.tiktokUrl && (
-                    <a href={settings.tiktokUrl} target="_blank" rel="noreferrer" aria-label="TikTok" title="TikTok" className="w-10 h-10 rounded-full bg-white border border-black/10 text-[13px] font-black text-slate-700 hover:text-black hover:shadow-md transition-all flex items-center justify-center">
-                      <span aria-hidden="true">♫</span>
+                    <a href={settings.tiktokUrl} target="_blank" rel="noreferrer" aria-label="TikTok" title="TikTok" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#00F2EA] hover:border-[#00F2EA]/30 hover:shadow-md transition-all flex items-center justify-center">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                        <path d="M14.8 3h2.6c.2 1.5 1.3 2.8 2.6 3.3v2.7c-1.3 0-2.6-.4-3.7-1.1v6.3c0 3-2.4 5.4-5.4 5.4a5.4 5.4 0 1 1 0-10.8c.3 0 .6 0 .9.1v2.7a2.8 2.8 0 1 0 1.9 2.7V3z" />
+                      </svg>
                     </a>
                   )}
                 </div>
@@ -406,21 +414,32 @@ export default function App() {
                 <div className="px-6 flex items-center justify-center mb-6" dir="rtl">
                    <h2 className="text-[20px] font-black uppercase italic" style={{ color: settings.primaryColor }}>عروض نارية 🔥</h2>
                 </div>
-                <div className="flex gap-6 px-6 overflow-x-auto no-scrollbar pb-8 snap-x">
+                <div className="flex gap-4 px-6 overflow-x-auto no-scrollbar pb-8 snap-x">
                   {discountItems.map(item => (
-                    <div key={item.id} className="snap-center shrink-0 w-[74vw] max-w-[300px] md:w-72 rounded-[2.2rem] p-5 text-white relative overflow-hidden shadow-xl border border-white/20" style={{ backgroundColor: settings.primaryColor }}>
+                    <div key={item.id} className="snap-center shrink-0 w-[68vw] max-w-[260px] md:w-64 rounded-[1.8rem] p-4 text-white relative overflow-hidden shadow-xl border border-white/30" style={{ background: `linear-gradient(160deg, ${settings.primaryColor} 0%, #7c2d12 130%)` }}>
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_45%)]" />
+                      <div className="absolute -bottom-8 -right-8 w-24 h-24 rounded-full bg-white/10 blur-2xl" />
+                      <div className="absolute top-2 left-2 w-14 h-14 rounded-full border border-white/15" />
                       <div className="relative z-10">
-                        <div className="mb-4"><span className="bg-white/20 backdrop-blur-md text-[8px] font-black px-3 py-1 rounded-full">OFFER</span></div>
-                        <h3 className="text-xl font-black uppercase leading-tight mb-6 tracking-tight text-right">{item.name}</h3>
+                        <div className="mb-3 flex items-center justify-between">
+                          <span className="bg-white/20 backdrop-blur-md text-[8px] font-black px-2.5 py-1 rounded-full">HOT DEAL</span>
+                          <span className="bg-black/30 text-[9px] font-black px-2 py-1 rounded-full">
+                            -{Math.round(((Number(item.price || 0) - Number(item.salePrice || 0)) / Number(item.price || 1)) * 100)}%
+                          </span>
+                        </div>
+                        <h3 className="text-lg font-black uppercase leading-tight mb-5 tracking-tight text-right">{item.name}</h3>
                         <div className="flex justify-between items-end">
-                           <button onClick={() => addToCart(item)} className="bg-white w-10 h-10 rounded-full flex items-center justify-center font-black shadow-lg text-lg text-black">＋</button>
+                           <button onClick={() => addToCart(item)} className="bg-white w-9 h-9 rounded-full flex items-center justify-center font-black shadow-lg text-base text-black hover:scale-105 transition-transform">＋</button>
                            <div className="text-right">
-                             <p className="text-sm font-black opacity-75 line-through mb-1">{Number(item.price || 0).toLocaleString()} د.ع</p>
-                             <p className="text-3xl font-black tracking-tight leading-none">{Number(item.salePrice || 0).toLocaleString()} <span className="text-sm">د.ع</span></p>
+                             <p className="text-[12px] font-black opacity-75 mb-1">
+                               <span className="old-price-fancy">{Number(item.price || 0).toLocaleString()}</span>
+                               <span className="mr-1">د.ع</span>
+                             </p>
+                             <p className="text-[30px] font-black tracking-tight leading-none">{Number(item.salePrice || 0).toLocaleString()} <span className="text-xs">د.ع</span></p>
                           </div>
                         </div>
                       </div>
-                      <img src={item.image} className="absolute -top-8 -left-8 w-32 h-32 object-cover opacity-20 -rotate-12 rounded-[3rem]" onError={(e) => e.target.src = PLACEHOLDER} />
+                      <img src={item.image} className="absolute -top-7 -left-7 w-24 h-24 object-cover opacity-[0.08] -rotate-12 rounded-[2rem] saturate-0" onError={(e) => e.target.src = PLACEHOLDER} />
                     </div>
                   ))}
                 </div>
@@ -527,6 +546,12 @@ export default function App() {
         .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
         .animate-shake { animation: shake 0.2s ease-in-out 0s 2; }
+        .old-price-fancy {
+          text-decoration: line-through;
+          text-decoration-thickness: 2px;
+          text-decoration-color: rgba(255, 255, 255, 0.95);
+          text-decoration-skip-ink: none;
+        }
       `}} />
     </div>
   );
