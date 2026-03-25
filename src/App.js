@@ -6,8 +6,7 @@ import {
   onSnapshot, 
   doc, 
   setDoc, 
-  deleteDoc,
-  enableIndexedDbPersistence
+  deleteDoc
 } from "firebase/firestore";
 import { 
   getAuth, 
@@ -36,10 +35,6 @@ const firebaseConfig = typeof window !== 'undefined' && window.__firebase_config
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-
-try {
-  enableIndexedDbPersistence(db).catch(() => {});
-} catch (e) {}
 
 const appId = typeof window !== 'undefined' && window.__app_id 
   ? window.__app_id 
@@ -80,6 +75,7 @@ export default function App() {
 
   const [newItem, setNewItem] = useState({ name: "", price: "", salePrice: "", desc: "", image: "", category: "برجر" });
   const [saveStatus, setSaveStatus] = useState("");
+  const [newCategoryInput, setNewCategoryInput] = useState("");
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -166,6 +162,26 @@ export default function App() {
     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id));
   };
 
+  const handleAddCategory = async () => {
+    const trimmed = newCategoryInput.trim();
+    if (!trimmed || categories.includes(trimmed)) return;
+    const updated = [...categories, trimmed];
+    setCategories(updated);
+    setNewCategoryInput("");
+    await setDoc(getSettingsDoc(), { categories: updated }, { merge: true });
+  };
+
+  const handleRemoveCategory = async (cat) => {
+    const updated = categories.filter(c => c !== cat);
+    setCategories(updated);
+    await setDoc(getSettingsDoc(), { categories: updated }, { merge: true });
+  };
+
+  const handleToggleVisibility = async (item) => {
+    const hidden = !item.hidden;
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', item.id), { hidden }, { merge: true });
+  };
+
   const addToCart = (item) => setCart(p => ({ ...p, [item.id]: (p[item.id] || 0) + 1 }));
   const removeFromCart = (id) => setCart(p => {
     const n = { ...p };
@@ -179,8 +195,9 @@ export default function App() {
   }, 0), [cart, menuItems]);
 
   const filteredItems = useMemo(() => {
-    if (activeCategory === "الكل") return menuItems;
-    return menuItems.filter(item => item.category === activeCategory);
+    const visible = menuItems.filter(item => !item.hidden);
+    if (activeCategory === "الكل") return visible;
+    return visible.filter(item => item.category === activeCategory);
   }, [menuItems, activeCategory]);
 
   const discountItems = useMemo(() => {
@@ -194,6 +211,12 @@ export default function App() {
     }).join('\n');
     const text = `طلب جديد: ${settings.restaurantNameAr}\n\nالاسم: ${customerName}\nالهاتف: ${customerPhone}\nالعنوان: ${address}\n\nالأصناف:\n${itemsStr}\n\nالمجموع: ${cartTotal.toLocaleString()} د.ع`;
     window.open(`https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(text)}`);
+    // Fix: clear cart and close modal after sending
+    setCart({});
+    setIsCheckoutOpen(false);
+    setCustomerName("");
+    setCustomerPhone("");
+    setAddress("");
   };
 
   return (
@@ -231,6 +254,29 @@ export default function App() {
                   <span className="text-white text-[10px] font-bold">اللون الأساسي</span>
                   <input type="color" className="w-10 h-10 rounded bg-transparent border-0 cursor-pointer" value={settings.primaryColor} onChange={e => updateGlobalSettings("primaryColor", e.target.value)} />
                 </div>
+              </div>
+            </section>
+
+            {/* CATEGORY MANAGEMENT */}
+            <section className="bg-slate-900 rounded-[2.5rem] p-8 border border-white/10 shadow-xl">
+              <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em] mb-6">إدارة الأقسام</h3>
+              <div className="flex gap-2 mb-4">
+                <input
+                  className="flex-1 bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm"
+                  placeholder="اسم القسم الجديد"
+                  value={newCategoryInput}
+                  onChange={e => setNewCategoryInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
+                />
+                <button onClick={handleAddCategory} className="px-6 py-4 rounded-xl text-white font-black text-xs uppercase" style={{ backgroundColor: settings.primaryColor }}>إضافة +</button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {categories.map(cat => (
+                  <div key={cat} className="flex items-center gap-2 bg-black/40 border border-white/10 px-4 py-2 rounded-xl">
+                    <span className="text-white text-xs font-bold">{cat}</span>
+                    <button onClick={() => handleRemoveCategory(cat)} className="text-red-400 hover:text-red-300 font-black text-sm leading-none">×</button>
+                  </div>
+                ))}
               </div>
             </section>
 
@@ -276,25 +322,28 @@ export default function App() {
               
               <div className="grid grid-cols-1 gap-3">
                 {menuItems.map(item => (
-                    <div key={item.id} className="bg-black/40 p-3 rounded-2xl border border-white/5 flex items-center justify-between group hover:border-white/20 transition-all">
+                    <div key={item.id} className={`bg-black/40 p-3 rounded-2xl border border-white/5 flex items-center justify-between group hover:border-white/20 transition-all ${item.hidden ? 'opacity-40' : ''}`}>
                       <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-800 shadow-inner">
+                        <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-800 shadow-inner relative">
                             <img 
                                 src={item.image || PLACEHOLDER} 
                                 className="w-full h-full object-cover" 
                                 onError={(e) => e.target.src = PLACEHOLDER}
                             />
+                            {item.hidden && <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-xs">🙈</div>}
                         </div>
                         <div>
                           <p className="text-white font-bold text-sm mb-0.5">{item.name}</p>
                           <div className="flex items-center gap-2">
                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-white/5 text-white/40">{item.category}</span>
-                             <span className="text-[10px] font-black text-orange-500">{item.price.toLocaleString()} د.ع</span>
+                             <span className="text-[10px] font-black text-orange-500">{(item.price || 0).toLocaleString()} د.ع</span>
+                             {item.hidden && <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-yellow-500/20 text-yellow-400">مخفي</span>}
                           </div>
                         </div>
                       </div>
                       
                       <div className="flex gap-2">
+                        <button onClick={() => handleToggleVisibility(item)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${item.hidden ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500 hover:text-white' : 'bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white'}`}>{item.hidden ? '🙈 مخفي' : '👁 ظاهر'}</button>
                         <button onClick={() => { setNewItem({...item}); document.getElementById('item-form').scrollIntoView({ behavior: 'smooth' }); }} className="text-white/40 hover:text-white p-3 text-[10px] font-black uppercase">تعديل</button>
                         <button onClick={() => { if(window.confirm(`حذف ${item.name}؟`)) handleDeleteItem(item.id); }} className="bg-red-500/10 text-red-500 px-4 py-2 rounded-xl hover:bg-red-500 hover:text-white transition-all text-[10px] font-black uppercase">حذف</button>
                       </div>
