@@ -7,7 +7,8 @@ import {
   doc, 
   updateDoc,
   setDoc, 
-  deleteDoc
+  deleteDoc,
+  enableIndexedDbPersistence
 } from "firebase/firestore";
 import { 
   getAuth, 
@@ -37,6 +38,14 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// SPEED BOOST: Enable Offline Persistence
+// This makes items load INSTANTLY if the user has visited before.
+try {
+  enableIndexedDbPersistence(db).catch(() => {
+    // Silently fail if multiple tabs are open
+  });
+} catch (e) {}
+
 const appId = typeof window !== 'undefined' && window.__app_id 
   ? window.__app_id 
   : 'karbala-burger-pro-v1';
@@ -49,11 +58,19 @@ const OWNER_PASSWORD = "KarbalaGrill2024";
 export default function App() {
   const [view, setView] = useState("customer"); 
   const [user, setUser] = useState(null);
-  const [menuItems, setMenuItems] = useState([]);
-  const [categories, setCategories] = useState(["Burgers", "Drinks", "Mandi"]);
+  
+  // SPEED FIX: Initialize with data from LocalStorage if available for 0ms loading
+  const [menuItems, setMenuItems] = useState(() => {
+    const saved = localStorage.getItem('kb_menu_cache');
+    return saved ? JSON.parse(saved) : [];
+  });
+  
+  const [categories, setCategories] = useState(() => {
+    const saved = localStorage.getItem('kb_cat_cache');
+    return saved ? JSON.parse(saved) : ["Burgers", "Drinks", "Mandi"];
+  });
+
   const [cart, setCart] = useState({});
-  // SPEED FIX: loading starts as false so UI renders immediately. 
-  // We use dataLoaded to show a small spinner only inside the menu area.
   const [dataLoaded, setDataLoaded] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [address, setAddress] = useState("");
@@ -62,7 +79,6 @@ export default function App() {
   const [passInput, setPassInput] = useState("");
   const [showError, setShowError] = useState(false);
 
-  // Global Business Settings
   const [settings, setSettings] = useState({
     restaurantName: "AL KARBALA BURGER",
     tagline: "Best Grill in the City",
@@ -123,18 +139,23 @@ export default function App() {
     initAuth();
     onAuthStateChanged(auth, (u) => u && setUser(u));
 
-    // Listen to Menu
-    const unsubMenu = onSnapshot(getMenuRef(), (snap) => {
+    // Listen to Menu - Faster connection
+    const unsubMenu = onSnapshot(getMenuRef(), { includeMetadataChanges: true }, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setMenuItems(data);
-      setDataLoaded(true); 
+      setDataLoaded(true);
+      // Update cache
+      localStorage.setItem('kb_menu_cache', JSON.stringify(data));
     }, (error) => setDataLoaded(true));
 
-    // Listen to Settings
+    // Listen to Settings - Faster connection
     const unsubSettings = onSnapshot(getSettingsRef(), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        if (Array.isArray(data.categories)) setCategories(data.categories);
+        if (Array.isArray(data.categories)) {
+           setCategories(data.categories);
+           localStorage.setItem('kb_cat_cache', JSON.stringify(data.categories));
+        }
         setSettings(prev => ({ ...prev, ...data }));
       }
     });
@@ -161,7 +182,7 @@ export default function App() {
       price: parseInt(newItem.price) || 0,
       salePrice: newItem.salePrice ? parseInt(newItem.salePrice) : null
     });
-    setNewItem({ ...newItem, name: "", price: "", salePrice: "", desc: "", image: "" });
+    setNewItem({ name: "", price: "", salePrice: "", desc: "", image: "", category: newItem.category });
   };
 
   const addCategory = async () => {
@@ -304,18 +325,18 @@ export default function App() {
               </div>
               <div className="flex gap-4">
                 <input 
-                  placeholder="New Section" 
+                  placeholder="New Section (e.g. Pizza, Steaks)" 
                   className="flex-1 bg-black/40 border border-white/10 p-5 rounded-2xl outline-none focus:border-orange-500 text-sm"
                   value={newCatInput}
                   onChange={e => setNewCatInput(e.target.value)}
                 />
-                <button onClick={addCategory} className="bg-white text-black px-10 rounded-2xl font-black uppercase text-[10px] tracking-widest">Add</button>
+                <button onClick={addCategory} className="bg-white text-black px-10 rounded-2xl font-black uppercase text-[10px] tracking-widest">Add Section</button>
               </div>
             </div>
 
             {/* Admin Add Item */}
             <div className="max-w-5xl mx-auto mb-24 bg-white/5 border border-white/10 p-12 rounded-[5rem]">
-              <h3 className="text-2xl font-black italic uppercase mb-10" style={{ color: settings.primaryColor }}>New Item</h3>
+              <h3 className="text-2xl font-black italic uppercase mb-10" style={{ color: settings.primaryColor }}>Create New Item</h3>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
                 <div className="md:col-span-2">
                   <input placeholder="Item Name" className="w-full bg-black/60 border border-white/10 p-6 rounded-3xl outline-none text-sm" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
@@ -326,14 +347,14 @@ export default function App() {
                   </select>
                 </div>
                 <input placeholder="Price (IQD)" className="w-full bg-black/60 border border-white/10 p-6 rounded-3xl outline-none text-sm" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
-                <input placeholder="Offer Price" className="w-full bg-black/60 border border-orange-500/20 p-6 rounded-3xl outline-none text-sm" style={{ color: settings.primaryColor }} value={newItem.salePrice} onChange={e => setNewItem({...newItem, salePrice: e.target.value})} />
-                <input placeholder="Image Link" className="w-full md:col-span-2 bg-black/60 border border-white/10 p-6 rounded-3xl outline-none text-sm" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
-                <textarea placeholder="Description" className="w-full md:col-span-4 bg-black/60 border border-white/10 p-6 rounded-3xl outline-none text-sm h-32 resize-none" value={newItem.desc} onChange={e => setNewItem({...newItem, desc: e.target.value})} />
+                <input placeholder="Offer Price (Optional)" className="w-full bg-black/60 border border-orange-500/20 p-6 rounded-3xl outline-none text-sm" style={{ color: settings.primaryColor }} value={newItem.salePrice} onChange={e => setNewItem({...newItem, salePrice: e.target.value})} />
+                <input placeholder="Image Link (URL)" className="w-full md:col-span-2 bg-black/60 border border-white/10 p-6 rounded-3xl outline-none text-sm" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
+                <textarea placeholder="Description (Optional)" className="w-full md:col-span-4 bg-black/60 border border-white/10 p-6 rounded-3xl outline-none text-sm h-32 resize-none" value={newItem.desc} onChange={e => setNewItem({...newItem, desc: e.target.value})} />
                 <button onClick={addNewItem} className="md:col-span-4 py-8 rounded-[2.5rem] font-black uppercase text-[12px] tracking-[0.3em] shadow-2xl" style={{ backgroundColor: settings.primaryColor }}>Post to Menu</button>
               </div>
             </div>
 
-            {/* Existing Items */}
+            {/* Existing Items - Interactive Editor */}
             <div className="max-w-5xl mx-auto space-y-20">
               {categories.map(cat => (
                 <div key={String(cat)} className="space-y-8">
@@ -341,11 +362,14 @@ export default function App() {
                   <div className="grid grid-cols-1 gap-6">
                     {menuItems.filter(i => i.category === cat).map(item => (
                       <div key={item.id} className="bg-white/5 border border-white/5 p-8 rounded-[3.5rem] flex items-center gap-8 group">
-                        <img src={item.image} className="w-20 h-20 rounded-2xl object-cover bg-slate-800" loading="lazy" />
+                        <img src={item.image || 'https://via.placeholder.com/150'} className="w-20 h-20 rounded-2xl object-cover bg-slate-800" loading="lazy" />
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1">
                           <input className="bg-transparent border-b border-white/10 p-2 text-white font-bold" value={item.name} onChange={e => updateCloudItem(item.id, "name", e.target.value)} />
-                          <input className="bg-transparent border-b border-white/10 p-2 text-white" value={item.price} onChange={e => updateCloudItem(item.id, "price", parseInt(e.target.value) || 0)} />
-                          <button onClick={() => deleteItem(item.id)} className="bg-red-600/10 text-red-500 px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all">Remove</button>
+                          <div className="flex items-center gap-2">
+                            <input className="bg-transparent border-b border-white/10 p-2 text-white w-full" value={item.price} onChange={e => updateCloudItem(item.id, "price", parseInt(e.target.value) || 0)} />
+                            <span className="text-[8px] text-slate-500">IQD</span>
+                          </div>
+                          <button onClick={() => deleteItem(item.id)} className="bg-red-600/10 text-red-500 px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all">Remove Item</button>
                         </div>
                       </div>
                     ))}
@@ -394,16 +418,16 @@ export default function App() {
 
           {/* Menu Sections */}
           <main className="max-w-7xl mx-auto px-6 py-20 space-y-32 min-h-[40vh]">
-            {!dataLoaded ? (
+            {menuItems.length === 0 && !dataLoaded ? (
               <div className="flex flex-col items-center justify-center py-20">
                 <div className="w-12 h-12 border-4 border-slate-200 border-t-orange-600 rounded-full animate-spin mb-6"></div>
-                <p className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-400">Syncing Menu...</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-400">Loading Menu...</p>
               </div>
-            ) : menuItems.length === 0 ? (
+            ) : menuItems.length === 0 && dataLoaded ? (
               <div className="text-center py-32 opacity-20">
                 <span className="text-6xl mb-6 block">🍽️</span>
                 <h3 className="text-xl font-black uppercase italic">Menu is being prepared</h3>
-                <p className="text-[10px] font-bold uppercase tracking-widest mt-2">Check back in a moment</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest mt-2">The owner hasn't added items yet</p>
               </div>
             ) : (
               Object.entries(groupedMenu).map(([category, items]) => (
