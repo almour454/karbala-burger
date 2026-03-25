@@ -86,7 +86,8 @@ export default function App() {
     tiktokUrl: "",
     checkoutNote: "يرجى التأكد من الاسم ورقم الهاتف قبل إرسال الطلب.",
     dealsSectionTitle: "عروض نارية 🔥",
-    cartDeliveryNote: "رسوم التوصيل حسب المنطقة — لا تُضاف تلقائيًا للمجموع."
+    cartDeliveryNote: "رسوم التوصيل حسب المنطقة — لا تُضاف تلقائيًا للمجموع.",
+    deliveryFee: 0
   });
 
   const [cart, setCart] = useState({});
@@ -283,10 +284,24 @@ export default function App() {
     return n;
   });
 
+  const removeCartLine = (id) => setCart(p => {
+    const n = { ...p };
+    delete n[id];
+    return n;
+  });
+
+  const clearCart = () => {
+    setCart({});
+    setIsCheckoutOpen(false);
+  };
+
   const cartTotal = useMemo(() => Object.entries(cart).reduce((t, [id, q]) => {
     const item = menuItems.find(m => m.id === id);
     return item ? t + ((item.salePrice || item.price) * q) : t;
   }, 0), [cart, menuItems]);
+
+  const deliveryFee = Math.max(0, Number(settings.deliveryFee) || 0);
+  const orderGrandTotal = cartTotal + deliveryFee;
 
   const filteredItems = useMemo(() => {
     const visible = menuItems.filter(item => !item.hidden);
@@ -298,12 +313,21 @@ export default function App() {
     return menuItems.filter(item => !item.hidden && item.salePrice && item.salePrice < item.price);
   }, [menuItems]);
 
+  useEffect(() => {
+    if (isCheckoutOpen && Object.keys(cart).length === 0) {
+      setIsCheckoutOpen(false);
+    }
+  }, [cart, isCheckoutOpen]);
+
   const sendWhatsApp = () => {
     const itemsStr = Object.entries(cart).map(([id, q]) => {
       const it = menuItems.find(m=>m.id===id);
       return `${q}x ${it?.name}`;
     }).join('\n');
-    const text = `طلب جديد: ${settings.restaurantNameAr}\n\nالاسم: ${customerName}\nالهاتف: ${customerPhone}\nالعنوان: ${address}\n\nالأصناف:\n${itemsStr}\n\nالمجموع: ${cartTotal.toLocaleString()} د.ع`;
+    const feeLine = deliveryFee > 0
+      ? `\nمجموع الأصناف: ${cartTotal.toLocaleString()} د.ع\nرسوم التوصيل: ${deliveryFee.toLocaleString()} د.ع\nالإجمالي: ${orderGrandTotal.toLocaleString()} د.ع`
+      : `\nالمجموع: ${cartTotal.toLocaleString()} د.ع`;
+    const text = `طلب جديد: ${settings.restaurantNameAr}\n\nالاسم: ${customerName}\nالهاتف: ${customerPhone}\nالعنوان: ${address}\n\nالأصناف:\n${itemsStr}${feeLine}`;
     window.open(`https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(text)}`);
     // Fix: clear cart and close modal after sending
     setCart({});
@@ -365,6 +389,10 @@ export default function App() {
                 <textarea className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2 h-24 resize-none" placeholder="رسالة تظهر عند متابعة الطلب" value={settings.checkoutNote || ""} onChange={e => updateGlobalSettings("checkoutNote", e.target.value)} />
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2" placeholder="عنوان قسم الخصومات (مثال: عروض نارية 🔥)" value={settings.dealsSectionTitle || ""} onChange={e => updateGlobalSettings("dealsSectionTitle", e.target.value)} />
                 <textarea className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2 h-20 resize-none" placeholder="ملاحظة بجانب السعر (توصيل، مناطق، إلخ)" value={settings.cartDeliveryNote || ""} onChange={e => updateGlobalSettings("cartDeliveryNote", e.target.value)} />
+                <div className="bg-black/40 border border-white/5 p-4 rounded-xl md:col-span-2">
+                  <p className="text-white text-[10px] font-bold mb-2">رسوم التوصيل (د.ع)</p>
+                  <input className="w-full bg-black/50 border border-white/10 p-4 rounded-xl text-white text-sm" type="number" min="0" step="1" placeholder="0 = بدون رسوم — تُضاف تلقائيًا للإجمالي" value={Number(settings.deliveryFee) || 0} onChange={e => updateGlobalSettings("deliveryFee", Math.max(0, Number(e.target.value) || 0))} />
+                </div>
                 <div className="flex items-center gap-4 bg-black/40 p-4 rounded-xl border border-white/5">
                   <span className="text-white text-[10px] font-bold">اللون الأساسي</span>
                   <input type="color" className="w-10 h-10 rounded bg-transparent border-0 cursor-pointer" value={settings.primaryColor} onChange={e => updateGlobalSettings("primaryColor", e.target.value)} />
@@ -643,7 +671,10 @@ export default function App() {
                   <div className="relative z-10 flex items-center gap-3 min-w-0 flex-1" dir="ltr">
                     <div className="w-12 h-12 shrink-0 rounded-full flex items-center justify-center font-black text-lg text-white shadow-lg ring-2 ring-white/35 bg-black/40" style={{ boxShadow: `0 4px 22px ${settings.primaryColor}99` }}>{Object.values(cart).reduce((a,b)=>a+b,0)}</div>
                     <div className="text-left min-w-0">
-                      <p className="text-lg font-black leading-tight text-white drop-shadow-md">{cartTotal.toLocaleString()} <span className="text-[10px] font-bold opacity-90">د.ع</span></p>
+                      <p className="text-lg font-black leading-tight text-white drop-shadow-md">{orderGrandTotal.toLocaleString()} <span className="text-[10px] font-bold opacity-90">د.ع</span></p>
+                      {deliveryFee > 0 && (
+                        <p className="text-[8px] font-bold text-white/80">شامل توصيل {deliveryFee.toLocaleString()} د.ع</p>
+                      )}
                       {settings.cartDeliveryNote && (
                         <p className="text-[9px] font-bold text-white/85 leading-snug line-clamp-2 drop-shadow-sm mt-0.5">{settings.cartDeliveryNote}</p>
                       )}
@@ -663,24 +694,53 @@ export default function App() {
                   <h2 className="text-3xl font-black italic">طلبك 📝</h2>
                   <button onClick={() => setIsCheckoutOpen(false)} className="w-12 h-12 bg-slate-100 rounded-full font-black text-2xl flex items-center justify-center">×</button>
                 </div>
-                <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 mb-8 space-y-3">
+                <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 mb-8">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-[10px] font-black text-slate-400 uppercase">السلة</span>
+                    <button type="button" onClick={clearCart} className="text-[10px] font-black text-red-600 hover:text-red-700">مسح السلة</button>
+                  </div>
+                  <div className="space-y-4 mb-4">
                     {Object.entries(cart).map(([id, q]) => {
                       const item = menuItems.find(m => m.id === id);
-                      return item && (
-                        <div key={id} className="flex justify-between text-xs font-black">
-                          <span className="text-slate-900">{q}x {item.name}</span>
-                          <span className="opacity-40">{((item.salePrice || item.price) * q).toLocaleString()} د.ع</span>
+                      if (!item) return null;
+                      const line = (item.salePrice || item.price) * q;
+                      return (
+                        <div key={id} className="bg-white rounded-2xl p-3 border border-slate-100">
+                          <div className="flex justify-between items-start gap-2 mb-2">
+                            <span className="text-sm font-black text-slate-900 leading-tight flex-1">{item.name}</span>
+                            <button type="button" onClick={() => removeCartLine(id)} className="text-[10px] font-black text-red-500 shrink-0 px-2 py-1 rounded-lg hover:bg-red-50">حذف</button>
+                          </div>
+                          <div className="flex justify-between items-center gap-2">
+                            <div className="flex items-center bg-slate-100 rounded-xl p-1">
+                              <button type="button" onClick={() => removeFromCart(id)} className="w-9 h-9 font-black text-slate-900 hover:bg-white rounded-lg leading-none">－</button>
+                              <span className="w-8 text-center font-black text-sm">{q}</span>
+                              <button type="button" onClick={() => addToCart(item)} className="w-9 h-9 font-black text-slate-900 hover:bg-white rounded-lg leading-none">＋</button>
+                            </div>
+                            <span className="text-xs font-black text-slate-600">{line.toLocaleString()} د.ع</span>
+                          </div>
                         </div>
-                      )
+                      );
                     })}
-                    <div className="border-t border-slate-200 mt-4 pt-4 space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-3xl font-black tracking-tighter" style={{ color: settings.primaryColor }}>{cartTotal.toLocaleString()} <span className="text-xs">د.ع</span></span>
-                      </div>
-                      {settings.cartDeliveryNote && (
-                        <p className="text-[11px] font-bold text-slate-500 leading-snug text-right">{settings.cartDeliveryNote}</p>
-                      )}
+                  </div>
+                  <div className="border-t border-slate-200 pt-4 space-y-2">
+                    <div className="flex justify-between text-xs font-black text-slate-600">
+                      <span>مجموع الأصناف</span>
+                      <span>{cartTotal.toLocaleString()} د.ع</span>
                     </div>
+                    {deliveryFee > 0 && (
+                      <div className="flex justify-between text-xs font-black text-slate-600">
+                        <span>رسوم التوصيل</span>
+                        <span>{deliveryFee.toLocaleString()} د.ع</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-end pt-2 border-t border-slate-200">
+                      <span className="text-sm font-black text-slate-800">الإجمالي</span>
+                      <span className="text-3xl font-black tracking-tighter" style={{ color: settings.primaryColor }}>{orderGrandTotal.toLocaleString()} <span className="text-xs">د.ع</span></span>
+                    </div>
+                    {settings.cartDeliveryNote && (
+                      <p className="text-[11px] font-bold text-slate-500 leading-snug text-right pt-1">{settings.cartDeliveryNote}</p>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-3 mb-8">
                   <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-5 bg-slate-50 rounded-2xl text-sm border-2 border-slate-100 font-bold text-right outline-none focus:border-orange-500" placeholder="الاسم الكامل" />
