@@ -69,10 +69,9 @@ const PLACEHOLDER = "https://images.unsplash.com/photo-1550547660-d9450f859349?q
 const digitsOnly = (raw) => String(raw || "").replace(/\D/g, "");
 
 const contactPhonesList = (s) =>
-  [s?.contactPhone1, s?.contactPhone2, s?.contactPhone3].filter((x) => {
-    const d = digitsOnly(x);
-    return d.length >= 6;
-  });
+  [s?.contactPhone1, s?.contactPhone2, s?.contactPhone3]
+    .map((x) => (x == null || x === "" ? "" : String(x).trim()))
+    .filter((x) => digitsOnly(x).length >= 5);
 
 const toTelHref = (raw) => {
   const d = digitsOnly(raw);
@@ -403,13 +402,25 @@ export default function App() {
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="Facebook URL" value={settings.facebookUrl || ""} onChange={e => updateGlobalSettings("facebookUrl", e.target.value)} />
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="Instagram URL" value={settings.instagramUrl || ""} onChange={e => updateGlobalSettings("instagramUrl", e.target.value)} />
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2" placeholder="TikTok URL" value={settings.tiktokUrl || ""} onChange={e => updateGlobalSettings("tiktokUrl", e.target.value)} />
-                <div className="md:col-span-2 bg-black/30 border border-white/10 rounded-2xl p-4">
-                  <p className="text-orange-400 text-[10px] font-black uppercase tracking-wider mb-3">أرقام اتصال اختيارية (تظهر بجانب السوشال)</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <input className="bg-black/40 border border-white/5 p-3 rounded-xl text-white text-sm" placeholder="هاتف 1 (964...)" value={settings.contactPhone1 || ""} onChange={e => updateGlobalSettings("contactPhone1", e.target.value)} />
-                    <input className="bg-black/40 border border-white/5 p-3 rounded-xl text-white text-sm" placeholder="هاتف 2 (اختياري)" value={settings.contactPhone2 || ""} onChange={e => updateGlobalSettings("contactPhone2", e.target.value)} />
-                    <input className="bg-black/40 border border-white/5 p-3 rounded-xl text-white text-sm" placeholder="هاتف 3 (اختياري)" value={settings.contactPhone3 || ""} onChange={e => updateGlobalSettings("contactPhone3", e.target.value)} />
-                  </div>
+                <div className="md:col-span-2 rounded-[1.5rem] border-2 border-orange-500/50 bg-gradient-to-br from-orange-500/15 to-transparent p-5 space-y-3">
+                  <p className="text-white font-black text-sm flex items-center gap-2" dir="rtl">
+                    <span aria-hidden="true">📞</span>
+                    ثلاثة أرقام اتصال (اختياري) — تظهر للزبائن تحت أيقونات السوشال
+                  </p>
+                  <p className="text-[10px] text-white/50 font-bold" dir="rtl">اكتب على الأقل 5 أرقام لكل خط (مثال: 9647801234567)</p>
+                  {[1, 2, 3].map((n) => (
+                    <div key={n} className="space-y-1">
+                      <label className="text-[10px] font-black text-orange-300/90 uppercase tracking-wide" dir="rtl">رقم الهاتف {n}</label>
+                      <input
+                        className="w-full bg-black/50 border border-white/15 p-4 rounded-xl text-white text-sm"
+                        placeholder={n === 1 ? "964..." : "اتركه فارغًا إن لم يُستخدم"}
+                        inputMode="tel"
+                        autoComplete="tel"
+                        value={String(settings[`contactPhone${n}`] ?? "")}
+                        onChange={(e) => updateGlobalSettings(`contactPhone${n}`, e.target.value)}
+                      />
+                    </div>
+                  ))}
                 </div>
                 <textarea className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2 h-24 resize-none" placeholder="رسالة تظهر عند متابعة الطلب" value={settings.checkoutNote || ""} onChange={e => updateGlobalSettings("checkoutNote", e.target.value)} />
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2" placeholder="عنوان قسم الخصومات (مثال: عروض نارية 🔥)" value={settings.dealsSectionTitle || ""} onChange={e => updateGlobalSettings("dealsSectionTitle", e.target.value)} />
@@ -544,7 +555,7 @@ export default function App() {
                   const hasSocial = settings.facebookUrl || settings.instagramUrl || settings.tiktokUrl;
                   if (!hasSocial && phones.length === 0) return null;
                   return (
-                    <div className="mt-2 flex flex-col items-center gap-3 w-full max-w-lg mx-auto px-2">
+                    <div className="mt-2 flex flex-col items-center gap-3 w-full max-w-2xl mx-auto px-2">
                       {hasSocial && (
                       <div className="flex flex-wrap items-center justify-center gap-2">
                         {settings.facebookUrl && (
@@ -573,21 +584,23 @@ export default function App() {
                       </div>
                       )}
                       {phones.length > 0 && (
-                        <div className={`flex flex-wrap items-center justify-center gap-2 w-full ${hasSocial ? "border-t border-black/5 pt-3" : "pt-1"}`}>
-                          <span className="w-full text-center text-[9px] font-black uppercase tracking-widest text-slate-400">اتصل بنا</span>
-                          {phones.map((num, idx) => (
-                            <a
-                              key={`${digitsOnly(num)}-${idx}`}
-                              href={toTelHref(num)}
-                              className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white border border-black/10 text-slate-800 text-[11px] font-black shadow-sm hover:shadow-md hover:border-slate-300 transition-all"
-                              dir="ltr"
-                            >
-                              <svg aria-hidden="true" viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path strokeLinecap="round" d="M5 4h3l2 5-2 1a10 10 0 006 6l1-2 5 2v3a2 2 0 01-2 2A17 17 0 013 6a2 2 0 012-2z" />
-                              </svg>
-                              <span className="tabular-nums tracking-tight">{digitsOnly(num) || num}</span>
-                            </a>
-                          ))}
+                        <div className={`w-full ${hasSocial ? "border-t border-black/5 pt-3" : "pt-1"}`}>
+                          <span className="block text-center text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">اتصل بنا</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
+                            {phones.map((num, idx) => (
+                              <a
+                                key={`contact-phone-${idx}`}
+                                href={toTelHref(num)}
+                                className="inline-flex items-center justify-center gap-2 px-3 py-3 rounded-2xl bg-white border border-black/10 text-slate-800 text-[11px] sm:text-[10px] font-black shadow-sm hover:shadow-md hover:border-slate-300 transition-all min-h-[44px]"
+                                dir="ltr"
+                              >
+                                <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 shrink-0 opacity-80" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                </svg>
+                                <span className="tabular-nums tracking-tight break-all text-center">{digitsOnly(num) || num}</span>
+                              </a>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
