@@ -6,7 +6,8 @@ import {
   doc, 
   setDoc, 
   deleteDoc,
-  onSnapshot
+  onSnapshot,
+  enableIndexedDbPersistence
 } from "firebase/firestore"; 
 import { 
   getAuth, 
@@ -33,7 +34,8 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// 🛡️ PERMANENT ID - Keeps your data safe across refreshes and devices
+// 🛡️ PERMANENT ID - This is your "Serial Number". Do not change this.
+// It ensures the site always finds your burgers.
 const APP_ID_PERMANENT = "karbala-burger-pro-v1";
 const OWNER_PASSWORD = "KarbalaGrill2024"; 
 
@@ -47,7 +49,12 @@ export default function App() {
   const pendingIdRef = useRef(null);
 
   // App State
-  const [menuItems, setMenuItems] = useState([]);
+  const [menuItems, setMenuItems] = useState(() => {
+    // Try to load from backup immediately so the screen isn't blank
+    const backup = typeof window !== 'undefined' ? localStorage.getItem("karbala_menu_backup") : null;
+    return backup ? JSON.parse(backup) : [];
+  });
+
   const [categories] = useState(["Burgers", "Drinks", "Mandi", "Appetizers"]);
   const [settings, setSettings] = useState({
     restaurantName: "AL KARBALA BURGER",
@@ -60,21 +67,24 @@ export default function App() {
     const saved = typeof window !== 'undefined' ? localStorage.getItem("karbala_cart") : null;
     return saved ? JSON.parse(saved) : {};
   });
+
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [address, setAddress] = useState("");
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [passInput, setPassInput] = useState("");
   const [newItem, setNewItem] = useState({ name: "", price: "", salePrice: "", desc: "", image: "", category: "Burgers" });
 
-  // Save cart locally
+  // Save cart and menu backup to device
   useEffect(() => {
     localStorage.setItem("karbala_cart", JSON.stringify(cart));
-  }, [cart]);
+    if (menuItems.length > 0) {
+      localStorage.setItem("karbala_menu_backup", JSON.stringify(menuItems));
+    }
+  }, [cart, menuItems]);
 
   // 1. AUTHENTICATION (RULE 3)
   useEffect(() => {
     const initAuth = async () => {
-      setAuthStatus("Connecting...");
       try {
         const token = typeof window !== 'undefined' ? window.__initial_auth_token : null;
         if (token && token !== "") {
@@ -83,8 +93,7 @@ export default function App() {
           await signInAnonymously(auth);
         }
       } catch (err) {
-        setAuthStatus("Offline");
-        setDbError("Connection failed. Check your internet.");
+        setAuthStatus("Offline Mode");
       }
     };
 
@@ -103,15 +112,23 @@ export default function App() {
     if (!user) return;
 
     const menuRef = collection(db, 'artifacts', APP_ID_PERMANENT, 'public', 'data', 'menu');
+    
+    // onSnapshot is "Real-time" - it keeps the items on the screen as long as the app is open
     const unsubMenu = onSnapshot(menuRef, (snap) => {
       const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setMenuItems(items);
       setIsDataLoaded(true);
+      setDbError(null);
+      
       if (pendingIdRef.current && items.some(i => i.id === pendingIdRef.current)) {
         setIsSaving(false);
         pendingIdRef.current = null;
       }
-    }, (err) => setDbError("Cloud Error: " + err.code));
+    }, (err) => {
+      console.error(err);
+      // If internet dies, we don't clear the menu, we just show an error
+      setDbError("Syncing Paused (Check Connection)");
+    });
 
     const settingsRef = doc(db, 'artifacts', APP_ID_PERMANENT, 'public', 'data', 'settings', 'global');
     const unsubSettings = onSnapshot(settingsRef, (snap) => {
@@ -122,13 +139,12 @@ export default function App() {
   }, [user]);
 
   const safeWrite = async (action) => {
-    if (!user) return setDbError("Waiting for connection...");
+    if (!user) return setDbError("Login required to save changes.");
     setIsSaving(true);
-    setDbError(null);
     try {
       await action();
     } catch (e) {
-      setDbError("Database Error: " + e.message);
+      setDbError("Save failed: " + e.message);
       setIsSaving(false);
     }
   };
@@ -173,15 +189,16 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#fafafa] text-[#1a1a1a] font-sans">
+      {/* ⚠️ SYSTEM MESSAGES */}
       {dbError && (
-        <div className="fixed top-0 left-0 w-full bg-red-600 text-white p-2 text-[10px] font-black uppercase text-center z-[9999]">
-          {dbError} <button onClick={() => window.location.reload()} className="underline ml-2">Reload</button>
+        <div className="fixed top-0 left-0 w-full bg-orange-600 text-white p-2 text-[10px] font-black uppercase text-center z-[9999] shadow-lg">
+          {dbError}
         </div>
       )}
 
       {/* Connection Light */}
       <div className="fixed bottom-4 left-4 z-[9999] flex items-center gap-2 bg-black/80 text-white px-3 py-1.5 rounded-full text-[8px] font-black uppercase border border-white/10">
-        <div className={`w-1.5 h-1.5 rounded-full ${authStatus === 'Online' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}></div>
+        <div className={`w-1.5 h-1.5 rounded-full ${authStatus === 'Online' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-red-500 animate-pulse'}`}></div>
         {authStatus}
       </div>
 
@@ -211,15 +228,15 @@ export default function App() {
                 </select>
                 <input className="col-span-2 bg-slate-50 p-4 rounded-2xl text-sm font-bold border border-slate-100 outline-none" placeholder="Image URL" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
                 <button onClick={addNewItem} disabled={isSaving || authStatus !== 'Online'} className="col-span-2 py-5 bg-black text-white rounded-2xl font-black uppercase text-[10px] tracking-widest disabled:opacity-30">
-                  {isSaving ? "Syncing..." : "Save to Cloud"}
+                  {isSaving ? "Syncing to Cloud..." : "Save Product"}
                 </button>
               </div>
             </div>
 
             <div className="space-y-3">
-              <h3 className="text-xs font-black uppercase px-4 opacity-30 tracking-widest">Live Menu ({menuItems.length})</h3>
+              <h3 className="text-xs font-black uppercase px-4 opacity-30 tracking-widest">Live Menu Database ({menuItems.length})</h3>
               {menuItems.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).map(item => (
-                <div key={item.id} className="bg-white p-4 rounded-3xl flex items-center justify-between border border-slate-100">
+                <div key={item.id} className="bg-white p-4 rounded-3xl flex items-center justify-between border border-slate-100 shadow-sm">
                   <div className="flex items-center gap-4">
                     <img src={item.image || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=100'} className="w-12 h-12 rounded-xl object-cover" />
                     <div>
@@ -227,7 +244,7 @@ export default function App() {
                       <p className="text-[10px] text-orange-600 font-bold">{Number(item.price).toLocaleString()} IQD</p>
                     </div>
                   </div>
-                  <button onClick={() => deleteItem(item.id)} className="px-4 py-2 text-red-500 font-black text-[10px] uppercase">Remove</button>
+                  <button onClick={() => deleteItem(item.id)} className="px-4 py-2 text-red-500 font-black text-[10px] uppercase hover:bg-red-50 rounded-xl transition-all">Remove</button>
                 </div>
               ))}
             </div>
@@ -241,41 +258,45 @@ export default function App() {
           </header>
 
           <main className="max-w-6xl mx-auto px-6">
-            {Object.entries(groupedMenu).map(([cat, items]) => (
-              <section key={cat} className="mb-20">
-                <h2 className="text-3xl font-black italic uppercase mb-10 tracking-tight flex items-center gap-4">
-                  {cat} <div className="h-1 flex-1 bg-slate-100 rounded-full"></div>
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {items.map(item => (
-                    <div key={item.id} className="bg-white rounded-[3rem] p-4 border border-slate-100 shadow-sm group transition-all">
-                      <div className="aspect-square rounded-[2.5rem] overflow-hidden mb-6 bg-slate-50">
-                        <img src={item.image || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=600'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                      </div>
-                      <div className="px-2 pb-2">
-                        <div className="flex justify-between items-start mb-4">
-                          <h3 className="text-xl font-black uppercase italic tracking-tighter">{item.name}</h3>
-                          <p className="font-black text-orange-600">{Number(item.price).toLocaleString()} <span className="text-[8px]">IQD</span></p>
+            {!isDataLoaded && menuItems.length === 0 ? (
+              <div className="text-center py-20 animate-pulse font-black uppercase text-xs opacity-20 italic">Opening the Grill...</div>
+            ) : (
+              Object.entries(groupedMenu).map(([cat, items]) => (
+                <section key={cat} className="mb-20">
+                  <h2 className="text-3xl font-black italic uppercase mb-10 tracking-tight flex items-center gap-4">
+                    {cat} <div className="h-1 flex-1 bg-slate-100 rounded-full"></div>
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {items.map(item => (
+                      <div key={item.id} className="bg-white rounded-[3rem] p-4 border border-slate-100 shadow-sm group hover:shadow-xl transition-all">
+                        <div className="aspect-square rounded-[2.5rem] overflow-hidden mb-6 bg-slate-50">
+                          <img src={item.image || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=600'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                         </div>
-                        {cart[item.id] ? (
-                          <div className="flex bg-black text-white rounded-2xl p-1 items-center">
-                            <button onClick={() => removeFromCart(item.id)} className="w-12 h-12 flex items-center justify-center font-black">－</button>
-                            <span className="flex-1 text-center font-black text-xs">{cart[item.id]}</span>
-                            <button onClick={() => addToCart(item)} className="w-12 h-12 flex items-center justify-center font-black">＋</button>
+                        <div className="px-2 pb-2">
+                          <div className="flex justify-between items-start mb-4">
+                            <h3 className="text-xl font-black uppercase italic tracking-tighter">{item.name}</h3>
+                            <p className="font-black text-orange-600">{Number(item.price).toLocaleString()} <span className="text-[8px]">IQD</span></p>
                           </div>
-                        ) : (
-                          <button onClick={() => addToCart(item)} className="w-full py-4 rounded-2xl bg-slate-50 font-black uppercase text-[10px] tracking-widest hover:bg-black hover:text-white transition-all">Add to Tray</button>
-                        )}
+                          {cart[item.id] ? (
+                            <div className="flex bg-black text-white rounded-2xl p-1 items-center">
+                              <button onClick={() => removeFromCart(item.id)} className="w-12 h-12 flex items-center justify-center font-black text-xl hover:text-orange-500 transition-colors">－</button>
+                              <span className="flex-1 text-center font-black text-xs">{cart[item.id]} IN TRAY</span>
+                              <button onClick={() => addToCart(item)} className="w-12 h-12 flex items-center justify-center font-black text-xl hover:text-orange-500 transition-colors">＋</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => addToCart(item)} className="w-full py-4 rounded-2xl bg-slate-50 font-black uppercase text-[10px] tracking-widest hover:bg-black hover:text-white transition-all">Add to Tray</button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
+                    ))}
+                  </div>
+                </section>
+              ))
+            )}
           </main>
           
           {cartTotal > 0 && (
-            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-md px-6 z-[2000]">
+            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-md px-6 z-[2000] animate-in slide-in-from-bottom-20">
               <button onClick={() => setIsCheckoutOpen(true)} className="w-full bg-black text-white p-2 rounded-full shadow-2xl flex items-center">
                 <div className="bg-orange-600 h-14 w-14 rounded-full flex items-center justify-center font-black italic">{Object.values(cart).reduce((a,b)=>a+b,0)}</div>
                 <div className="flex-1 px-6 text-left font-black italic">{cartTotal.toLocaleString()} IQD</div>
