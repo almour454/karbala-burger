@@ -6,7 +6,8 @@ import {
   doc, 
   setDoc, 
   deleteDoc,
-  onSnapshot
+  onSnapshot,
+  enableIndexedDbPersistence
 } from "firebase/firestore"; 
 import { 
   getAuth, 
@@ -16,8 +17,6 @@ import {
 } from "firebase/auth";
 
 // --- FIREBASE CONFIG ---
-// ⚠️ IMPORTANT: In your Firebase Console, go to:
-// Authentication > Sign-in method > Add new provider > Anonymous > ENABLE.
 const localConfig = {
   apiKey: "AIzaSyBi9O20ep4sQEfAQSvQAexHzzT1wjj8cHc",
   authDomain: "karbala-burger-app.firebaseapp.com",
@@ -71,23 +70,23 @@ export default function App() {
         const token = typeof window !== 'undefined' ? window.__initial_auth_token : null;
         if (token) {
           await signInWithCustomToken(auth, token);
-          setAuthStatus("Signed in with Token");
         } else {
-          // LIVE SITE PATH
           await signInAnonymously(auth);
-          setAuthStatus("Signed in Anonymously");
         }
       } catch (err) {
         console.error("Auth Error:", err);
         setAuthStatus("Auth Failed: " + err.code);
-        setDbError(`Firebase Error: ${err.message}. Make sure 'Anonymous Auth' is ENABLED in your Firebase Console!`);
+        setDbError(`Login Failed: ${err.message}. Ensure 'Anonymous' is enabled in Firebase Auth.`);
       }
     };
 
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      if (u) setAuthStatus(`Online: ${u.uid.substring(0,8)}...`);
+      if (u) {
+        setAuthStatus("Ready");
+        setDbError(null);
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -100,7 +99,10 @@ export default function App() {
     const menuRef = collection(db, 'artifacts', appId, 'public', 'data', 'menu');
     const unsubMenu = onSnapshot(menuRef, (snap) => {
       setMenuItems(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => setDbError("Firestore Error: " + err.message));
+    }, (err) => {
+      console.error(err);
+      setDbError("Sync Error: " + err.message);
+    });
 
     // Sync Settings
     const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
@@ -110,37 +112,56 @@ export default function App() {
         setSettings(prev => ({ ...prev, ...data }));
         if (data.categories) setCategories(data.categories);
       }
-    }, (err) => setDbError("Settings Error: " + err.message));
+    });
 
     return () => { unsubMenu(); unsubSettings(); };
   }, [user]);
 
-  // Firestore Helper
+  // Enhanced Firestore Helper to prevent infinite hangs
   const safeWrite = async (action) => {
     if (!user) {
-      setDbError("You are not authenticated. Try refreshing or enabling Anonymous Auth in Firebase.");
+      setDbError("Not Authenticated. Please wait for the 'Ready' status.");
       return;
     }
+    
     setIsSaving(true);
+    
+    // Create a timeout so it doesn't stay "Publishing" forever
+    const timeout = setTimeout(() => {
+      if (isSaving) {
+        setIsSaving(false);
+        setDbError("Request timed out. Check your internet or Firebase Rules.");
+      }
+    }, 8000);
+
     try {
       await action();
       setDbError(null);
+      clearTimeout(timeout);
     } catch (e) {
+      console.error(e);
       setDbError("Write Failed: " + e.message);
+      clearTimeout(timeout);
     } finally {
       setIsSaving(false);
     }
   };
 
   const addNewItem = () => safeWrite(async () => {
-    if (!newItem.name || !newItem.price) return;
+    if (!newItem.name || !newItem.price) {
+      setDbError("Please enter a name and price.");
+      return;
+    }
     const id = "item_" + Date.now();
-    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id), {
+    const itemData = {
       ...newItem,
       id,
       price: parseInt(newItem.price),
-      salePrice: newItem.salePrice ? parseInt(newItem.salePrice) : null
-    });
+      salePrice: newItem.salePrice ? parseInt(newItem.salePrice) : null,
+      createdAt: new Date().toISOString()
+    };
+    
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id), itemData);
     setNewItem({ name: "", price: "", salePrice: "", desc: "", image: "", category: "Burgers" });
   });
 
@@ -174,11 +195,13 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-orange-100">
       
-      {/* 🛠️ DEBUG OVERLAY (Only visible if something is wrong) */}
+      {/* 🛠️ ERROR NOTIFICATION */}
       {dbError && (
-        <div className="fixed top-0 left-0 w-full bg-red-600 text-white p-4 z-[5000] text-center text-xs font-bold shadow-2xl flex items-center justify-center gap-4">
-          <span>🚨 {dbError}</span>
-          <button onClick={() => window.location.reload()} className="bg-white text-red-600 px-4 py-1 rounded-full uppercase">Retry</button>
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 w-full max-w-md px-6 z-[5000] animate-bounce">
+          <div className="bg-red-600 text-white p-4 rounded-2xl text-center text-xs font-black shadow-2xl flex items-center justify-between">
+            <span>🚨 {dbError}</span>
+            <button onClick={() => setDbError(null)} className="bg-white/20 p-2 rounded-lg">✕</button>
+          </div>
         </div>
       )}
 
@@ -196,13 +219,18 @@ export default function App() {
               <h2 className="text-white text-2xl font-black uppercase italic mb-6">Staff Only</h2>
               <input type="password" value={passInput} onChange={e => setPassInput(e.target.value)} className="w-full bg-black p-5 rounded-2xl text-white text-center mb-4 outline-none border border-white/10" placeholder="Password" />
               <button onClick={() => passInput === OWNER_PASSWORD ? setIsUnlocked(true) : setDbError("Wrong Password")} className="w-full py-5 bg-orange-600 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest">Unlock Grill</button>
-              <p className="mt-6 text-[10px] text-slate-500 uppercase font-black">Status: {authStatus}</p>
+              <p className="mt-6 text-[10px] text-slate-500 uppercase font-black">Connection: {authStatus}</p>
             </div>
           </div>
         ) : (
           <div className="max-w-4xl mx-auto pt-32 pb-40 px-6">
             <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 mb-10">
-              <h2 className="text-3xl font-black uppercase italic mb-8" style={{ color: settings.primaryColor }}>Shop Settings</h2>
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-3xl font-black uppercase italic" style={{ color: settings.primaryColor }}>Shop Settings</h2>
+                <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${authStatus === 'Ready' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
+                  {authStatus}
+                </span>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <input className="bg-slate-50 p-5 rounded-2xl outline-none border border-slate-100" placeholder="Shop Name" value={settings.restaurantName} onChange={e => updateSetting("restaurantName", e.target.value)} />
                 <input className="bg-slate-50 p-5 rounded-2xl outline-none border border-slate-100" placeholder="WhatsApp Number" value={settings.whatsapp} onChange={e => updateSetting("whatsapp", e.target.value)} />
@@ -220,22 +248,32 @@ export default function App() {
                 <input className="bg-slate-50 p-5 rounded-2xl outline-none border border-slate-100" placeholder="Sale Price (Optional)" value={newItem.salePrice} onChange={e => setNewItem({...newItem, salePrice: e.target.value})} />
                 <input className="md:col-span-2 bg-slate-50 p-5 rounded-2xl outline-none border border-slate-100" placeholder="Image URL (Unsplash works best)" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
               </div>
-              <button onClick={addNewItem} disabled={isSaving} className="w-full py-6 bg-slate-950 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50">
-                {isSaving ? "Publishing..." : "Add to Menu"}
+              <button 
+                onClick={addNewItem} 
+                disabled={isSaving || authStatus !== 'Ready'} 
+                className="w-full py-6 bg-slate-950 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 relative overflow-hidden"
+              >
+                {isSaving ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="animate-spin text-lg">⏳</span> Publishing to Menu...
+                  </span>
+                ) : "Add to Menu"}
               </button>
             </div>
 
             <div className="space-y-4">
+              <h3 className="text-xl font-black uppercase italic px-4">Current Menu ({menuItems.length})</h3>
+              {menuItems.length === 0 && <p className="p-10 text-center text-slate-400 font-bold italic">The grill is empty...</p>}
               {menuItems.map(item => (
-                <div key={item.id} className="bg-white p-4 rounded-3xl flex items-center justify-between border border-slate-100 shadow-sm">
+                <div key={item.id} className="bg-white p-4 rounded-3xl flex items-center justify-between border border-slate-100 shadow-sm animate-in fade-in zoom-in duration-300">
                   <div className="flex items-center gap-4">
-                    <img src={item.image} className="w-16 h-16 rounded-2xl object-cover" />
+                    <img src={item.image || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=200'} className="w-16 h-16 rounded-2xl object-cover" />
                     <div>
                       <p className="font-black uppercase text-sm">{item.name}</p>
-                      <p className="text-[10px] text-slate-400 font-bold">{item.category} • {item.price} IQD</p>
+                      <p className="text-[10px] text-slate-400 font-bold">{item.category} • {item.price.toLocaleString()} IQD</p>
                     </div>
                   </div>
-                  <button onClick={() => deleteItem(item.id)} className="p-4 text-red-500 font-black text-xs uppercase">Delete</button>
+                  <button onClick={() => deleteItem(item.id)} className="p-4 text-red-500 font-black text-xs uppercase hover:bg-red-50 rounded-2xl transition-colors">Delete</button>
                 </div>
               ))}
             </div>
