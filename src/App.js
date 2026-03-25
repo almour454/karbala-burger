@@ -5,12 +5,15 @@ import {
   collection, 
   onSnapshot, 
   doc, 
+  getDoc,
   setDoc, 
   deleteDoc
 } from "firebase/firestore";
 import { 
   getAuth, 
   signInAnonymously, 
+  signInWithEmailAndPassword,
+  signOut,
   signInWithCustomToken, 
   onAuthStateChanged 
 } from "firebase/auth";
@@ -42,8 +45,8 @@ const appId = typeof window !== 'undefined' && window.__app_id
 
 const getMenuCollection = () => collection(db, 'artifacts', appId, 'public', 'data', 'menu');
 const getSettingsDoc = () => doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
+const getOwnerDoc = () => doc(db, 'artifacts', appId, 'private', 'data', 'admin', 'owner');
 
-const OWNER_PASSWORD = "12345"; 
 const PLACEHOLDER = "https://images.unsplash.com/photo-1550547660-d9450f859349?q=80&w=200&auto=format&fit=crop";
 
 export default function App() {
@@ -74,8 +77,9 @@ export default function App() {
   const [address, setAddress] = useState("");
   
   const [isUnlocked, setIsUnlocked] = useState(false);
-  const [passInput, setPassInput] = useState("");
-  const [showError, setShowError] = useState(false);
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [ownerPassword, setOwnerPassword] = useState("");
+  const [authError, setAuthError] = useState("");
 
   const [newItem, setNewItem] = useState({ name: "", price: "", salePrice: "", desc: "", image: "", category: "برجر" });
   const [saveStatus, setSaveStatus] = useState("");
@@ -102,6 +106,7 @@ export default function App() {
     const initAuth = async () => {
       const token = typeof window !== 'undefined' ? window.__initial_auth_token : null;
       try {
+        if (auth.currentUser) return;
         if (token) await signInWithCustomToken(auth, token);
         else await signInAnonymously(auth);
       } catch (e) {
@@ -112,6 +117,22 @@ export default function App() {
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => { if (u) setUser(u); });
     return () => unsubscribeAuth();
   }, []);
+
+  useEffect(() => {
+    const syncOwnerAccess = async () => {
+      if (!user || user.isAnonymous) {
+        setIsUnlocked(false);
+        return;
+      }
+      try {
+        const ownerSnap = await getDoc(getOwnerDoc());
+        setIsUnlocked(ownerSnap.exists() && ownerSnap.data().uid === user.uid);
+      } catch {
+        setIsUnlocked(false);
+      }
+    };
+    syncOwnerAccess();
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -131,10 +152,39 @@ export default function App() {
     return () => { unsubMenu(); unsubSettings(); };
   }, [user]);
 
-  const handleAuthSubmit = (e) => {
+  const handleAuthSubmit = async (e) => {
     e.preventDefault();
-    if (passInput === OWNER_PASSWORD) { setIsUnlocked(true); setShowError(false); } 
-    else { setShowError(true); setPassInput(""); }
+    if (!ownerEmail.trim() || !ownerPassword) return;
+    setAuthError("");
+    try {
+      const cred = await signInWithEmailAndPassword(auth, ownerEmail.trim(), ownerPassword);
+      const ownerRef = getOwnerDoc();
+      const ownerSnap = await getDoc(ownerRef);
+      if (!ownerSnap.exists()) {
+        await setDoc(ownerRef, {
+          uid: cred.user.uid,
+          email: cred.user.email || ownerEmail.trim(),
+          createdAt: new Date().toISOString()
+        }, { merge: true });
+      } else if (ownerSnap.data().uid !== cred.user.uid) {
+        await signOut(auth);
+        await signInAnonymously(auth);
+        setAuthError("هذا الحساب ليس مالك النظام.");
+        setIsUnlocked(false);
+        return;
+      }
+      setIsUnlocked(true);
+      setOwnerPassword("");
+    } catch (err) {
+      setAuthError("فشل تسجيل الدخول. تحقق من الإيميل وكلمة المرور.");
+    }
+  };
+
+  const handleOwnerLogout = async () => {
+    await signOut(auth);
+    await signInAnonymously(auth);
+    setIsUnlocked(false);
+    setOwnerPassword("");
   };
 
   const updateGlobalSettings = async (field, value) => {
@@ -238,14 +288,19 @@ export default function App() {
         !isUnlocked ? (
           <div className="flex flex-col items-center justify-center min-h-[70vh] p-6">
             <form onSubmit={handleAuthSubmit} className="bg-slate-900 border border-white/10 p-10 rounded-[3rem] w-full max-w-sm text-center shadow-2xl scale-in">
-              <div className="text-5xl mb-6">📸</div>
+              <div className="text-5xl mb-6">👨‍🍳</div>
               <h2 className="text-white text-2xl font-black italic uppercase mb-6">دخول الإدارة المرئية</h2>
-              <input type="password" value={passInput} onChange={e => setPassInput(e.target.value)} className={`w-full bg-black border ${showError ? 'border-red-500 animate-shake' : 'border-white/10'} p-5 rounded-2xl text-white text-center outline-none focus:border-orange-500 text-xl font-bold`} placeholder="كلمة المرور" />
+              <input type="email" value={ownerEmail} onChange={e => setOwnerEmail(e.target.value)} className={`w-full bg-black border ${authError ? 'border-red-500' : 'border-white/10'} p-4 rounded-2xl text-white text-right outline-none focus:border-orange-500 text-sm font-bold mb-3`} placeholder="Owner Email" />
+              <input type="password" value={ownerPassword} onChange={e => setOwnerPassword(e.target.value)} className={`w-full bg-black border ${authError ? 'border-red-500 animate-shake' : 'border-white/10'} p-4 rounded-2xl text-white text-right outline-none focus:border-orange-500 text-sm font-bold`} placeholder="كلمة المرور" />
+              {authError && <p className="mt-3 text-red-400 text-xs font-bold">{authError}</p>}
               <button type="submit" className="w-full mt-6 py-5 text-white font-black rounded-2xl text-[12px] uppercase tracking-widest shadow-xl transition-transform active:scale-95" style={{ backgroundColor: settings.primaryColor }}>دخول</button>
             </form>
           </div>
         ) : (
           <div className="max-w-4xl mx-auto p-6 pb-40 space-y-8" dir="rtl">
+            <div className="flex justify-end">
+              <button onClick={handleOwnerLogout} className="bg-black text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider">تسجيل خروج</button>
+            </div>
             
             {/* BRANDING */}
             <section className="bg-slate-900 rounded-[2.5rem] p-8 border border-white/10 shadow-xl">
@@ -313,7 +368,7 @@ export default function App() {
                 <div className="flex flex-col gap-4">
                     <div className="relative group w-full aspect-video bg-black rounded-2xl overflow-hidden border border-white/10 flex items-center justify-center">
                         {newItem.image ? (
-                            <img src={newItem.image} className="w-full h-full object-cover" onError={(e) => e.target.src = PLACEHOLDER} />
+                            <img src={newItem.image} alt={newItem.name || "preview"} className="w-full h-full object-cover" onError={(e) => e.target.src = PLACEHOLDER} />
                         ) : (
                             <div className="text-white/20 text-[10px] font-black uppercase text-center p-4">معاينة الصورة ستظهر هنا<br/>Image Preview</div>
                         )}
@@ -341,6 +396,7 @@ export default function App() {
                         <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-800 shadow-inner relative">
                             <img 
                                 src={item.image || PLACEHOLDER} 
+                                alt={item.name || "menu item"}
                                 className="w-full h-full object-cover" 
                                 onError={(e) => e.target.src = PLACEHOLDER}
                             />
@@ -435,11 +491,11 @@ export default function App() {
                                <span className="old-price-fancy old-price-hot">{Number(item.price || 0).toLocaleString()}</span>
                                <span className="mr-1 text-amber-100">د.ع</span>
                              </p>
-                             <p className="text-[30px] font-black tracking-tight leading-none">{Number(item.salePrice || 0).toLocaleString()} <span className="text-xs">د.ع</span></p>
+                             <p className="text-[36px] font-black tracking-tight leading-none">{Number(item.salePrice || 0).toLocaleString()} <span className="text-sm">د.ع</span></p>
                           </div>
                         </div>
                       </div>
-                      <img src={item.image} className="absolute -top-10 -left-10 w-40 h-40 object-cover opacity-[0.18] -rotate-12 rounded-[2.4rem] saturate-75 contrast-110" onError={(e) => e.target.src = PLACEHOLDER} />
+                      <img src={item.image} alt="" className="absolute -top-10 -left-10 w-40 h-40 object-cover opacity-[0.18] -rotate-12 rounded-[2.4rem] saturate-75 contrast-110" onError={(e) => e.target.src = PLACEHOLDER} />
                     </div>
                   ))}
                 </div>
@@ -461,7 +517,7 @@ export default function App() {
             {filteredItems.map(item => (
                 <div key={item.id} className="bg-white rounded-[2.5rem] p-4 flex flex-col border border-black/5 shadow-lg hover:shadow-2xl transition-all group">
                   <div className="w-full aspect-square rounded-[2rem] overflow-hidden bg-slate-50 mb-5 relative">
-                    <img src={item.image || PLACEHOLDER} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" onError={(e) => e.target.src = PLACEHOLDER} />
+                    <img src={item.image || PLACEHOLDER} alt={item.name || "menu item"} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" onError={(e) => e.target.src = PLACEHOLDER} />
                   </div>
                   <div className="flex-1 flex flex-col justify-between px-2">
                     <div className="mb-4">

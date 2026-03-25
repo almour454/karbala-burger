@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function ownerDocPath(appId) {
+      return /databases/$(database)/documents/artifacts/$(appId)/private/data/admin/owner;
+    }
+
+    function ownerDocExists(appId) {
+      return exists(ownerDocPath(appId));
+    }
+
+    function isOwner(appId) {
+      return request.auth != null
+        && ownerDocExists(appId)
+        && get(ownerDocPath(appId)).data.uid == request.auth.uid;
+    }
+
+    match /artifacts/{appId}/public/data/menu/{docId} {
+      allow read: if true;
+      allow write: if isOwner(appId);
+    }
+
+    match /artifacts/{appId}/public/data/settings/{docId} {
+      allow read: if true;
+      allow write: if isOwner(appId);
+    }
+
+    match /artifacts/{appId}/private/data/admin/owner {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && !ownerDocExists(appId);
+      allow update, delete: if isOwner(appId);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
