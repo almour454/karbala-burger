@@ -31,17 +31,34 @@ const localConfig = {
   measurementId: "G-XRPEGJZRHG"
 };
 
-const firebaseConfig = typeof window !== 'undefined' && window.__firebase_config 
-  ? JSON.parse(window.__firebase_config) 
-  : localConfig;
+const configFromEnv = {
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "",
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "",
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "",
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.REACT_APP_FIREBASE_APP_ID || "",
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || ""
+};
+
+const envFirebaseReady =
+  Boolean(configFromEnv.apiKey && configFromEnv.authDomain && configFromEnv.projectId && configFromEnv.appId);
+
+const firebaseConfig =
+  typeof window !== "undefined" && window.__firebase_config
+    ? JSON.parse(window.__firebase_config)
+    : envFirebaseReady
+      ? configFromEnv
+      : localConfig;
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const appId = typeof window !== 'undefined' && window.__app_id 
-  ? window.__app_id 
-  : 'karbala-burger-pro-v1';
+const appId =
+  typeof window !== "undefined" && window.__app_id
+    ? window.__app_id
+    : process.env.REACT_APP_APP_ID || "karbala-burger-pro-v1";
 
 const getMenuCollection = () => collection(db, 'artifacts', appId, 'public', 'data', 'menu');
 const getSettingsDoc = () => doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
@@ -80,6 +97,7 @@ export default function App() {
   const [ownerEmail, setOwnerEmail] = useState("");
   const [ownerPassword, setOwnerPassword] = useState("");
   const [authError, setAuthError] = useState("");
+  const [dataError, setDataError] = useState(null);
 
   const [newItem, setNewItem] = useState({ name: "", price: "", salePrice: "", desc: "", image: "", category: "برجر" });
   const [saveStatus, setSaveStatus] = useState("");
@@ -136,18 +154,33 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    const unsubMenu = onSnapshot(getMenuCollection(), (snap) => {
+    const unsubMenu = onSnapshot(
+      getMenuCollection(),
+      (snap) => {
+        setDataError(null);
         const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setMenuItems(data);
-      }, (err) => console.error(err));
+      },
+      (err) => {
+        console.error(err);
+        setDataError("تعذر تحميل المنيو. تحقق من الإنترنت أو حاول لاحقًا.");
+      }
+    );
 
-    const unsubSettings = onSnapshot(getSettingsDoc(), (snap) => {
+    const unsubSettings = onSnapshot(
+      getSettingsDoc(),
+      (snap) => {
         if (snap.exists()) {
           const data = snap.data();
           if (Array.isArray(data.categories)) setCategories(data.categories);
           setSettings(prev => ({ ...prev, ...data }));
         }
-      }, (err) => console.error(err));
+      },
+      (err) => {
+        console.error(err);
+        setDataError("تعذر تحميل الإعدادات. تحقق من الإنترنت أو حاول لاحقًا.");
+      }
+    );
 
     return () => { unsubMenu(); unsubSettings(); };
   }, [user]);
@@ -288,6 +321,14 @@ export default function App() {
           <button onClick={() => navigateTo("owner")} className={`px-8 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'owner' ? 'bg-white text-black shadow-lg' : 'text-slate-500'}`}>الإدارة</button>
         </div>
       </div>
+
+      {dataError && (
+        <div className="px-4 pb-2 max-w-xl mx-auto" dir="rtl">
+          <div className="bg-red-500/15 border border-red-500/35 text-red-900 rounded-2xl px-4 py-3 text-xs sm:text-sm font-bold text-center">
+            {dataError}
+          </div>
+        </div>
+      )}
 
       {view === "owner" ? (
         !isUnlocked ? (
