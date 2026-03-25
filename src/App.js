@@ -18,7 +18,7 @@ import {
 } from "firebase/auth";
 
 /**
- * 🛠️ FIREBASE CONFIG
+ * 🛠️ CONFIGURATION
  */
 const localConfig = {
   apiKey: "AIzaSyBi9O20ep4sQEfAQSvQAexHzzT1wjj8cHc",
@@ -27,6 +27,7 @@ const localConfig = {
   storageBucket: "karbala-burger-app.firebasestorage.app",
   messagingSenderId: "112064338237",
   appId: "1:112064338237:web:93b7154a4504704d82cd54",
+  measurementId: "G-XRPEGJZRHG"
 };
 
 const firebaseConfig = typeof window !== 'undefined' && window.__firebase_config 
@@ -43,7 +44,7 @@ try {
 
 const appId = typeof window !== 'undefined' && window.__app_id 
   ? window.__app_id 
-  : 'karbala-burger-v2-bold';
+  : 'karbala-burger-pro-v1';
 
 const getMenuRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'menu');
 const getSettingsRef = () => doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
@@ -54,28 +55,51 @@ export default function App() {
   const [view, setView] = useState("customer"); 
   const [user, setUser] = useState(null);
   const [activeCategory, setActiveCategory] = useState("الكل");
+  
   const [menuItems, setMenuItems] = useState([]);
   const [categories, setCategories] = useState(["برجر", "مقبلات", "مشروبات"]);
+
   const [cart, setCart] = useState({});
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [address, setAddress] = useState("");
+  
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [passInput, setPassInput] = useState("");
+  const [showError, setShowError] = useState(false);
 
   const [settings, setSettings] = useState({
     restaurantName: "AL KARBALA BURGER",
     restaurantNameAr: "برجر كربلاء",
+    tagline: "Best Grill in the City",
     primaryColor: "#ea580c", 
-    bgColor: "#ffffff",
+    bgColor: "#f8fafc",
     whatsapp: "964780000000",
     openingHours: "12:00 PM - 12:00 AM",
-    locationDesc: "كربلاء - المركز"
+    locationDesc: "Karbala, City Center"
   });
 
   const [newItem, setNewItem] = useState({ name: "", price: "", salePrice: "", desc: "", image: "", category: "برجر" });
   const [newCatInput, setNewCatInput] = useState("");
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace("#", "");
+      if (hash === "admin") setView("owner");
+      else setView("customer");
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    handleHashChange();
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  const navigateTo = (newView) => {
+    window.location.hash = newView === "owner" ? "admin" : "";
+    setView(newView);
+  };
 
   useEffect(() => {
     const initAuth = async () => {
@@ -83,21 +107,35 @@ export default function App() {
       try {
         if (token) await signInWithCustomToken(auth, token);
         else await signInAnonymously(auth);
-      } catch (e) {}
+      } catch (e) {
+        setUser({ uid: 'guest-' + Math.random().toString(36).substr(2, 9) });
+      }
     };
     initAuth();
     onAuthStateChanged(auth, (u) => u && setUser(u));
 
     const unsubMenu = onSnapshot(getMenuRef(), (snap) => {
-      setMenuItems(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.error(err));
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setMenuItems(data);
+      setDataLoaded(true);
+    });
 
     const unsubSettings = onSnapshot(getSettingsRef(), (snap) => {
-      if (snap.exists()) setSettings(prev => ({ ...prev, ...snap.data() }));
-    }, (err) => console.error(err));
+      if (snap.exists()) {
+        const data = snap.data();
+        if (Array.isArray(data.categories)) setCategories(data.categories);
+        setSettings(prev => ({ ...prev, ...data }));
+      }
+    });
 
     return () => { unsubMenu(); unsubSettings(); };
   }, []);
+
+  const handleAuthSubmit = (e) => {
+    e.preventDefault();
+    if (passInput === OWNER_PASSWORD) { setIsUnlocked(true); setShowError(false); } 
+    else { setShowError(true); setPassInput(""); }
+  };
 
   const updateSettings = async (field, value) => {
     await setDoc(getSettingsRef(), { [field]: value }, { merge: true });
@@ -111,18 +149,26 @@ export default function App() {
       id,
       price: parseInt(newItem.price) || 0,
       salePrice: newItem.salePrice ? parseInt(newItem.salePrice) : null,
+      createdAt: new Date().toISOString()
     });
     setNewItem({ name: "", price: "", salePrice: "", desc: "", image: "", category: newItem.category });
   };
 
   const addCategory = async () => {
     if (!newCatInput.trim()) return;
-    const updated = [...new Set([...(settings.categories || categories), newCatInput.trim()])];
+    const updated = [...new Set([...categories, newCatInput.trim()])];
     await updateSettings("categories", updated);
     setNewCatInput("");
   };
 
-  const deleteItem = async (id) => await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id));
+  const deleteCategory = async (catToDelete) => {
+    const updated = categories.filter(c => c !== catToDelete);
+    await updateSettings("categories", updated);
+  };
+
+  const deleteItem = async (id) => {
+    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id));
+  };
 
   const addToCart = (item) => setCart(p => ({ ...p, [item.id]: (p[item.id] || 0) + 1 }));
   const removeFromCart = (id) => setCart(p => {
@@ -137,224 +183,322 @@ export default function App() {
   }, 0), [cart, menuItems]);
 
   const filteredItems = useMemo(() => {
-    const list = activeCategory === "الكل" ? menuItems : menuItems.filter(i => i.category === activeCategory);
-    return list;
+    if (activeCategory === "الكل") return menuItems;
+    return menuItems.filter(item => item.category === activeCategory);
   }, [menuItems, activeCategory]);
 
+  const discountItems = useMemo(() => {
+    return menuItems.filter(item => item.salePrice && item.salePrice < item.price);
+  }, [menuItems]);
+
+  const handleCheckout = () => {
+    const items = Object.entries(cart).map(([id, q]) => `${q}x ${menuItems.find(m=>m.id===id)?.name}`).join('\n');
+    const text = `🔥 طلب جديد من ${settings.restaurantNameAr} 🔥\n\n👤 الاسم: ${customerName}\n📞 الهاتف: ${customerPhone}\n📍 العنوان: ${address}\n\n🛒 التفاصيل:\n${items}\n\n💰 المجموع: ${cartTotal.toLocaleString()} د.ع`;
+    const waUrl = `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(text)}`;
+    window.open(waUrl);
+  };
+
+  // Helper for High Contrast Text
+  const textStyle = {
+    textShadow: "0px 1px 2px rgba(0,0,0,0.1)"
+  };
+
   return (
-    <div className="min-h-screen transition-all duration-300" style={{ backgroundColor: settings.bgColor, color: '#1a1a1a' }}>
+    <div className="min-h-screen font-sans selection:bg-orange-100 antialiased transition-colors duration-500" style={{ backgroundColor: settings.bgColor }}>
       
-      {/* NAVIGATION PANEL */}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] flex bg-black p-1 rounded-full border border-white/20 shadow-2xl">
-        <button onClick={() => setView("customer")} className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest ${view === 'customer' ? 'text-white' : 'text-slate-500'}`} style={view === 'customer' ? {backgroundColor: settings.primaryColor} : {}}>Menu</button>
-        <button onClick={() => setView("owner")} className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest ${view === 'owner' ? 'bg-white text-black' : 'text-slate-500'}`}>Admin</button>
+      {/* 🛠 NAVIGATION */}
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] flex bg-black/95 backdrop-blur-md p-1.5 rounded-full border border-white/20 shadow-2xl">
+        <button 
+          onClick={() => navigateTo("customer")}
+          className={`px-8 py-2.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all ${view === 'customer' ? 'text-white shadow-lg' : 'text-slate-500'}`}
+          style={view === 'customer' ? { backgroundColor: settings.primaryColor } : {}}
+        >
+          Menu / المنيو
+        </button>
+        <button 
+          onClick={() => navigateTo("owner")}
+          className={`px-8 py-2.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all ${view === 'owner' ? 'bg-white text-black' : 'text-slate-500'}`}
+        >
+          Admin
+        </button>
       </div>
 
       {view === "owner" ? (
-        /* ADMIN VIEW */
-        <div className="pt-24 px-6 pb-20 max-w-2xl mx-auto">
-           {!isUnlocked ? (
-             <div className="bg-black p-8 rounded-[2rem] text-center border border-white/10">
-                <h2 className="text-white font-black mb-4">كود الدخول</h2>
-                <input type="password" value={passInput} onChange={e => setPassInput(e.target.value)} className="w-full bg-white/10 border border-white/20 p-4 rounded-xl text-white text-center mb-4" />
-                <button onClick={() => passInput === OWNER_PASSWORD && setIsUnlocked(true)} className="w-full py-4 rounded-xl text-white font-black uppercase tracking-widest" style={{backgroundColor: settings.primaryColor}}>دخول</button>
-             </div>
-           ) : (
-             <div className="space-y-6">
-                <div className="bg-white shadow-2xl p-6 rounded-[2rem] border-2 border-black/5">
-                   <h3 className="font-black mb-4 border-b pb-2">اعدادات المطعم</h3>
-                   <div className="space-y-3">
-                      <input className="w-full p-4 bg-slate-50 rounded-xl border font-bold" placeholder="Store Name EN" value={settings.restaurantName} onChange={e => updateSettings("restaurantName", e.target.value)} />
-                      <input className="w-full p-4 bg-slate-50 rounded-xl border font-bold" placeholder="اسم المطعم بالعربي" value={settings.restaurantNameAr} onChange={e => updateSettings("restaurantNameAr", e.target.value)} />
-                      <div className="flex gap-2 items-center p-4 bg-slate-50 rounded-xl border">
-                        <span className="text-xs font-black shrink-0">Background:</span>
-                        <input type="color" className="w-full h-8" value={settings.bgColor} onChange={e=>updateSettings("bgColor", e.target.value)} />
-                      </div>
-                   </div>
+        !isUnlocked ? (
+          <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+            <form onSubmit={handleAuthSubmit} className="bg-white/5 border border-white/10 p-10 rounded-[3rem] w-full max-w-sm text-center">
+              <h2 className="text-white text-2xl font-black italic uppercase mb-6 tracking-tighter">Kitchen Admin</h2>
+              <input 
+                type="password"
+                value={passInput}
+                onChange={e => setPassInput(e.target.value)}
+                className={`w-full bg-black/40 border ${showError ? 'border-red-500' : 'border-white/10'} p-5 rounded-2xl text-white text-center outline-none focus:border-orange-500 text-xl font-bold`}
+                placeholder="•••••"
+              />
+              <button type="submit" className="w-full mt-6 py-5 text-white font-black rounded-2xl text-[12px] uppercase tracking-widest shadow-xl" style={{ backgroundColor: settings.primaryColor }}>Login / دخول</button>
+            </form>
+          </div>
+        ) : (
+          <div className="min-h-screen bg-slate-950 text-white p-6 pt-24 pb-40">
+            <div className="max-w-4xl mx-auto space-y-10">
+              
+              <section className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10 shadow-2xl">
+                <h3 className="text-[10px] font-black uppercase opacity-40 mb-6 tracking-[0.2em]">Branding & Visuals</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase opacity-40 ml-2">Store Name (English)</label>
+                    <input className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-sm font-bold" placeholder="EN Name" value={settings.restaurantName} onChange={e => updateSettings("restaurantName", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase opacity-40 ml-2">اسم المطعم (عربي)</label>
+                    <input className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-sm font-bold text-right" placeholder="الاسم بالعربي" value={settings.restaurantNameAr} onChange={e => updateSettings("restaurantNameAr", e.target.value)} />
+                  </div>
+                  <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm font-bold" placeholder="WhatsApp (964...)" value={settings.whatsapp} onChange={e => updateSettings("whatsapp", e.target.value)} />
+                  <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm font-bold" placeholder="Opening Hours" value={settings.openingHours} onChange={e => updateSettings("openingHours", e.target.value)} />
+                  <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm font-bold text-right" placeholder="الموقع / العنوان" value={settings.locationDesc} onChange={e => updateSettings("locationDesc", e.target.value)} />
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col bg-black/40 border border-white/10 p-4 rounded-xl">
+                      <span className="text-[9px] font-black uppercase opacity-40 mb-2">Accent</span>
+                      <input type="color" value={settings.primaryColor} onChange={e => updateSettings("primaryColor", e.target.value)} className="w-full h-8 rounded cursor-pointer border-0 bg-transparent" />
+                    </div>
+                    <div className="flex flex-col bg-black/40 border border-white/10 p-4 rounded-xl">
+                      <span className="text-[9px] font-black uppercase opacity-40 mb-2">Background</span>
+                      <input type="color" value={settings.bgColor} onChange={e => updateSettings("bgColor", e.target.value)} className="w-full h-8 rounded cursor-pointer border-0 bg-transparent" />
+                    </div>
+                  </div>
                 </div>
+              </section>
 
-                <div className="bg-white shadow-2xl p-6 rounded-[2rem] border-2 border-black/5">
-                   <h3 className="font-black mb-4 border-b pb-2">الاصناف (Columns)</h3>
-                   <div className="flex flex-wrap gap-2 mb-4">
-                      {(settings.categories || categories).map(c => <span key={c} className="bg-black text-white px-4 py-2 rounded-full text-xs font-bold">{c}</span>)}
-                   </div>
-                   <div className="flex gap-2">
-                      <input className="flex-1 p-4 bg-slate-50 rounded-xl border font-bold" placeholder="صنف جديد..." value={newCatInput} onChange={e => setNewCatInput(e.target.value)} />
-                      <button onClick={addCategory} className="bg-black text-white px-6 rounded-xl font-black">اضافة</button>
-                   </div>
+              <section className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10 shadow-2xl">
+                <h3 className="text-[10px] font-black uppercase opacity-40 mb-6 tracking-[0.2em]">Categories / الاصناف</h3>
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {categories.map(c => (
+                    <div key={c} className="bg-white/10 px-5 py-2.5 rounded-xl flex items-center gap-4 text-[11px] font-black uppercase border border-white/5 shadow-inner">
+                      {c} <button onClick={() => deleteCategory(c)} className="text-red-500 font-black hover:scale-150 transition-transform">×</button>
+                    </div>
+                  ))}
                 </div>
+                <div className="flex gap-3">
+                  <input className="flex-1 bg-black/40 border border-white/10 p-5 rounded-2xl text-sm font-bold text-right" placeholder="صنف جديد (مثلا: عصائر)" value={newCatInput} onChange={e => setNewCatInput(e.target.value)} />
+                  <button onClick={addCategory} className="bg-white text-black px-8 rounded-2xl font-black uppercase text-[12px] shadow-lg hover:bg-orange-50 transition-colors">Add</button>
+                </div>
+              </section>
 
-                <div className="bg-white shadow-2xl p-6 rounded-[2rem] border-2 border-black/5">
-                   <h3 className="font-black mb-4 border-b pb-2">اضافة وجبة جديدة</h3>
-                   <div className="space-y-3">
-                      <input className="w-full p-4 bg-slate-50 rounded-xl border font-bold" placeholder="اسم الوجبة" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
-                      <select className="w-full p-4 bg-slate-50 rounded-xl border font-bold" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})}>
-                        {(settings.categories || categories).map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                      <div className="grid grid-cols-2 gap-2">
-                        <input className="p-4 bg-slate-50 rounded-xl border font-bold" placeholder="السعر" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
-                        <input className="p-4 bg-orange-50 rounded-xl border border-orange-200 font-bold" placeholder="سعر العرض (اختياري)" value={newItem.salePrice} onChange={e => setNewItem({...newItem, salePrice: e.target.value})} />
-                      </div>
-                      <input className="w-full p-4 bg-slate-50 rounded-xl border font-bold" placeholder="رابط الصورة" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
-                      <button onClick={addNewItem} className="w-full py-5 text-white rounded-xl font-black text-lg" style={{backgroundColor: settings.primaryColor}}>حفظ الوجبة ✅</button>
-                   </div>
+              <section className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10 shadow-2xl">
+                <h3 className="text-[10px] font-black uppercase opacity-40 mb-6 tracking-[0.2em]">Add Menu Item</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input className="md:col-span-2 bg-black/40 border border-white/10 p-5 rounded-2xl text-lg font-black text-right" placeholder="اسم الوجبة (مثلاً: برجر لحم دبل)" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                  <select className="bg-black/40 border border-white/10 p-5 rounded-2xl text-sm font-black text-right" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} >
+                    {categories.map(c => <option key={c} value={c} className="bg-slate-900">{c}</option>)}
+                  </select>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input className="bg-black/40 border border-white/10 p-5 rounded-2xl text-sm font-black" placeholder="Price (د.ع)" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
+                    <input className="bg-orange-500/10 border border-orange-500/30 p-5 rounded-2xl text-sm font-black text-orange-400 placeholder:text-orange-900" placeholder="Sale Price (عرض)" value={newItem.salePrice} onChange={e => setNewItem({...newItem, salePrice: e.target.value})} />
+                  </div>
+                  <input className="md:col-span-2 bg-black/40 border border-white/10 p-5 rounded-2xl text-sm font-bold" placeholder="Image Link / رابط الصورة" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
+                  <button onClick={addNewItem} className="md:col-span-2 py-6 rounded-2xl font-black uppercase text-[14px] tracking-[0.3em] shadow-2xl transition-transform active:scale-95" style={{ backgroundColor: settings.primaryColor }}>Save to Kitchen / حفظ</button>
                 </div>
-
-                <div className="bg-black p-6 rounded-[2rem]">
-                   <h3 className="text-white font-black mb-4">قائمة الوجبات الحالية</h3>
-                   {menuItems.map(item => (
-                     <div key={item.id} className="flex justify-between items-center text-white p-4 border-b border-white/10">
-                        <span>{item.name}</span>
-                        <button onClick={() => deleteItem(item.id)} className="bg-red-500 px-3 py-1 rounded-lg text-[10px] font-black">حذف</button>
-                     </div>
-                   ))}
-                </div>
-             </div>
-           )}
-        </div>
+              </section>
+            </div>
+          </div>
+        )
       ) : (
-        /* CUSTOMER VIEW */
         <div className="pb-40">
-          <header className="pt-24 pb-8 text-center px-6">
-             <h1 className="text-5xl font-black italic tracking-tighter drop-shadow-md leading-none mb-1" style={{ color: '#000', WebkitTextStroke: '1px rgba(255,255,255,0.2)' }}>{settings.restaurantName}</h1>
-             <h2 className="text-3xl font-black opacity-80" style={{ color: '#000' }}>{settings.restaurantNameAr}</h2>
-             <div className="mt-4 inline-flex items-center gap-2 bg-black text-white px-5 py-2 rounded-full text-[10px] font-black tracking-widest uppercase">
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-                {settings.openingHours}
+          {/* Header with Arabic/English mix */}
+          <header className="pt-24 pb-12 px-6 text-center">
+             <h1 className="text-6xl font-black italic uppercase tracking-tighter leading-tight drop-shadow-md" style={{ ...textStyle, color: '#111' }}>
+                {settings.restaurantName}
+             </h1>
+             <h2 className="text-4xl font-black text-slate-800/60 mt-2" style={{ ...textStyle, fontFamily: 'inherit' }}>{settings.restaurantNameAr}</h2>
+             
+             <div className="mt-10 flex flex-col items-center gap-2">
+                <div className="flex items-center gap-3 bg-black text-white px-6 py-2 rounded-full border border-black/10 shadow-xl">
+                   <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                   <span className="text-[11px] font-black uppercase tracking-widest">{settings.openingHours}</span>
+                </div>
+                <div className="text-[11px] font-black text-slate-900/40 uppercase flex items-center gap-1.5 tracking-tighter">
+                   📍 {settings.locationDesc}
+                </div>
              </div>
           </header>
 
-          {/* COLUMNS / CATEGORIES */}
-          <div className="sticky top-[60px] z-[900] py-4 bg-inherit/80 backdrop-blur-xl">
-             <div className="max-w-4xl mx-auto flex gap-3 px-6 overflow-x-auto no-scrollbar" dir="rtl">
-                <button onClick={() => setActiveCategory("الكل")} className={`shrink-0 px-8 py-4 rounded-2xl text-sm font-black transition-all shadow-lg ${activeCategory === "الكل" ? 'bg-black text-white' : 'bg-white text-black border-2 border-black/5'}`}>الكل</button>
-                {(settings.categories || categories).map(cat => (
-                  <button 
-                    key={cat} 
-                    onClick={() => setActiveCategory(cat)} 
-                    className={`shrink-0 px-8 py-4 rounded-2xl text-sm font-black transition-all shadow-lg ${activeCategory === cat ? 'text-white' : 'bg-white text-black border-2 border-black/5'}`}
-                    style={activeCategory === cat ? {backgroundColor: settings.primaryColor} : {}}
-                  >
-                    {cat}
-                  </button>
-                ))}
-             </div>
+          {/* 🔥 HOT DEALS */}
+          {discountItems.length > 0 && (
+            <section className="pt-2 pb-12">
+              <div className="max-w-6xl mx-auto">
+                <div className="px-6 flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="flex space-x-1">
+                        <div className="w-2 h-5 bg-orange-600 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-8 bg-orange-600 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                    </div>
+                    <h2 className="text-[18px] font-black uppercase tracking-tighter italic" style={{ color: settings.primaryColor, ...textStyle }}>العروض الساخنة 🔥 Hot Deals</h2>
+                  </div>
+                </div>
+                <div className="flex gap-6 px-6 overflow-x-auto no-scrollbar pb-8 snap-x">
+                  {discountItems.map(item => (
+                    <div key={item.id} className="snap-start shrink-0 w-80 rounded-[3rem] p-7 text-white relative overflow-hidden shadow-2xl shadow-black/20 transition-transform active:scale-95" style={{ backgroundColor: settings.primaryColor }}>
+                      <div className="relative z-10">
+                        <div className="mb-6">
+                          <span className="bg-white/30 backdrop-blur-lg text-[10px] font-black px-5 py-2.5 rounded-full uppercase border border-white/40 shadow-xl">
+                            توفير: {(item.price - item.salePrice).toLocaleString()} IQD
+                          </span>
+                        </div>
+                        <h3 className="text-3xl font-black uppercase leading-[0.9] mb-10 tracking-tighter text-shadow-lg">{item.name}</h3>
+                        <div className="flex justify-between items-end">
+                          <div>
+                             <p className="text-sm font-black opacity-60 line-through decoration-white/50 decoration-2 mb-1">{item.price.toLocaleString()} IQD</p>
+                             <p className="text-4xl font-black tracking-tighter drop-shadow-md">{item.salePrice.toLocaleString()} <span className="text-xs">IQD</span></p>
+                          </div>
+                          <button 
+                            onClick={() => addToCart(item)}
+                            className="bg-white w-16 h-16 rounded-full flex items-center justify-center font-black shadow-2xl shadow-black/30 hover:scale-110 active:rotate-45 transition-all text-3xl"
+                            style={{ color: settings.primaryColor }}
+                          >
+                            ＋
+                          </button>
+                        </div>
+                      </div>
+                      <img src={item.image} className="absolute -top-6 -right-6 w-52 h-52 object-cover opacity-30 -rotate-12 rounded-[4rem]" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* 🍔 CATEGORY SELECTOR - Bilingual & Bold */}
+          <div className="sticky top-[72px] z-[900] py-5 bg-inherit/80 backdrop-blur-xl border-b border-black/5">
+            <div className="max-w-6xl mx-auto flex gap-3 px-6 overflow-x-auto no-scrollbar">
+              <button 
+                onClick={() => setActiveCategory("الكل")}
+                className={`shrink-0 px-10 py-4 rounded-[2rem] text-[14px] font-black transition-all shadow-lg ${activeCategory === "الكل" ? 'bg-black text-white' : 'bg-white text-slate-900 border-2 border-black/5 hover:border-black/20'}`}
+              >
+                الكل
+              </button>
+              {categories.map(cat => (
+                <button 
+                  key={cat}
+                  onClick={() => setActiveCategory(cat)}
+                  className={`shrink-0 px-10 py-4 rounded-[2rem] text-[14px] font-black transition-all shadow-lg ${activeCategory === cat ? 'text-white' : 'bg-white text-slate-900 border-2 border-black/5'}`}
+                  style={activeCategory === cat ? { backgroundColor: settings.primaryColor } : {}}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* GRID OF ITEMS */}
-          <main className="max-w-5xl mx-auto px-6 py-8 grid grid-cols-1 md:grid-cols-2 gap-6" dir="rtl">
-             {filteredItems.map(item => (
-               <div key={item.id} className="relative group bg-white p-5 rounded-[2.5rem] border-2 border-black/5 shadow-xl hover:shadow-2xl transition-all flex flex-row-reverse gap-6 items-center">
-                  
-                  {/* BIG DISCOUNT TAG */}
+          {/* GRID - Bold Content */}
+          <main className="max-w-6xl mx-auto px-6 py-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8" dir="rtl">
+            {filteredItems.map(item => (
+              <div key={item.id} className="group bg-white rounded-[3rem] p-5 flex flex-col border-2 border-black/5 shadow-xl hover:shadow-2xl transition-all relative overflow-hidden">
+                <div className="w-full aspect-square rounded-[2.5rem] overflow-hidden bg-slate-100 relative mb-5 shadow-inner">
+                  <img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={item.name} />
                   {item.salePrice && (
-                    <div className="absolute top-4 left-4 z-10 bg-red-600 text-white px-4 py-2 rounded-2xl font-black text-[12px] shadow-lg animate-bounce">
-                       عرض خاص!
+                    <div className="absolute top-4 right-4 bg-red-600 text-white px-4 py-2 rounded-2xl font-black text-[10px] uppercase shadow-xl animate-pulse">
+                      SALE / عرض
                     </div>
                   )}
-
-                  <div className="w-32 h-32 md:w-40 md:h-40 shrink-0 rounded-[2.5rem] overflow-hidden bg-slate-100 border-2 border-black/5">
-                     <img src={item.image || "https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=400"} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={item.name} />
+                </div>
+                
+                <div className="flex-1 flex flex-col justify-between space-y-4">
+                  <div>
+                    <h3 className="text-xl font-black tracking-tight text-slate-900 leading-tight mb-1">{item.name}</h3>
+                    <p className="text-[12px] text-slate-500 font-bold leading-relaxed line-clamp-2" dir="ltr">{item.desc || "The original taste of Al Karbala Grill."}</p>
                   </div>
-
-                  <div className="flex-1 space-y-3">
-                     <div>
-                        <h3 className="text-xl md:text-2xl font-black leading-tight text-black">{item.name}</h3>
-                        <p className="text-xs font-bold text-slate-500 mt-1 leading-relaxed line-clamp-2">{item.desc || "ألذ وجبة كربلائية مشوية على الفحم"}</p>
-                     </div>
-
-                     <div className="flex items-center gap-4">
-                        {item.salePrice ? (
-                          <div className="flex flex-col">
-                             <span className="text-xs font-bold text-red-500 line-through opacity-50">{item.price.toLocaleString()} د.ع</span>
-                             <span className="text-2xl font-black tracking-tighter" style={{ color: settings.primaryColor }}>{item.salePrice.toLocaleString()} <span className="text-xs">دينار</span></span>
-                          </div>
-                        ) : (
-                          <span className="text-2xl font-black tracking-tighter" style={{ color: settings.primaryColor }}>{item.price.toLocaleString()} <span className="text-xs">دينار</span></span>
-                        )}
-                     </div>
-
-                     {cart[item.id] ? (
-                        <div className="flex items-center gap-4 bg-black p-1 rounded-2xl w-fit">
-                           <button onClick={() => removeFromCart(item.id)} className="w-10 h-10 flex items-center justify-center text-white font-black text-xl hover:bg-white/10 rounded-xl">－</button>
-                           <span className="text-white font-black text-lg min-w-[20px] text-center">{cart[item.id]}</span>
-                           <button onClick={() => addToCart(item)} className="w-10 h-10 flex items-center justify-center text-white font-black text-xl hover:bg-white/10 rounded-xl">＋</button>
+                  
+                  <div className="flex justify-between items-center flex-row-reverse">
+                    <div className="text-right">
+                      {item.salePrice ? (
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-slate-400 line-through decoration-red-500 decoration-2 mb-0.5">{item.price.toLocaleString()} IQD</span>
+                          <p className="font-black text-xl tracking-tighter" style={{ color: settings.primaryColor }}>
+                            {item.salePrice.toLocaleString()} <span className="text-[10px]">IQD</span>
+                          </p>
                         </div>
-                     ) : (
-                        <button 
-                          onClick={() => addToCart(item)}
-                          className="w-full py-4 bg-slate-950 text-white rounded-2xl font-black text-sm hover:scale-[1.02] active:scale-95 transition-all shadow-lg"
-                        >
-                          اضافة للسلة +
-                        </button>
-                     )}
+                      ) : (
+                        <p className="font-black text-xl tracking-tighter" style={{ color: settings.primaryColor }}>
+                          {item.price.toLocaleString()} <span className="text-[10px]">IQD</span>
+                        </p>
+                      )}
+                    </div>
+                    
+                    {cart[item.id] ? (
+                      <div className="flex items-center bg-black text-white rounded-2xl p-1 shadow-xl">
+                        <button onClick={() => removeFromCart(item.id)} className="w-9 h-9 font-black hover:bg-white/10 rounded-xl text-xl">－</button>
+                        <span className="w-7 text-center font-black text-sm">{cart[item.id]}</span>
+                        <button onClick={() => addToCart(item)} className="w-9 h-9 font-black hover:bg-white/10 rounded-xl text-xl">＋</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => addToCart(item)} className="px-7 py-3.5 bg-slate-900 text-white rounded-2xl font-black text-[12px] uppercase shadow-lg hover:bg-black transition-all active:scale-95">
+                        أضف +
+                      </button>
+                    )}
                   </div>
-               </div>
-             ))}
+                </div>
+              </div>
+            ))}
           </main>
 
-          {/* CHECKOUT BUTTON (THE FLOATER) */}
+          {/* CART TOTAL - THE FLOATING TICKET */}
           {cartTotal > 0 && (
-            <div className="fixed bottom-8 left-0 right-0 z-[1000] px-6">
-               <button 
-                 onClick={() => setIsCheckoutOpen(true)}
-                 className="max-w-md mx-auto w-full bg-black text-white p-3 rounded-[2.5rem] flex items-center justify-between shadow-2xl hover:scale-105 active:scale-95 transition-all border-4 border-white/10"
-               >
-                  <div className="flex items-center gap-4 pr-2" dir="rtl">
-                    <div className="w-14 h-14 rounded-full flex items-center justify-center font-black text-xl" style={{ backgroundColor: settings.primaryColor }}>
-                       {Object.values(cart).reduce((a,b)=>a+b,0)}
-                    </div>
-                    <div className="text-right">
-                       <p className="text-xs font-bold opacity-60 uppercase tracking-widest">المجموع</p>
-                       <p className="text-xl font-black">{cartTotal.toLocaleString()} دينار</p>
-                    </div>
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-sm px-6">
+              <button 
+                onClick={() => setIsCheckoutOpen(true)} 
+                className="w-full bg-black text-white p-3 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.4)] flex items-center justify-between hover:scale-[1.05] active:scale-95 transition-all border-4 border-white/5"
+              >
+                <div className="flex items-center gap-4 pl-2" dir="ltr">
+                  <div className="w-14 h-14 rounded-full flex items-center justify-center font-black text-xl shadow-inner" style={{ backgroundColor: settings.primaryColor }}>
+                    {Object.values(cart).reduce((a,b)=>a+b,0)}
                   </div>
-                  <div className="pl-8 font-black text-sm uppercase italic tracking-tighter">اطلب الان 🔥</div>
-               </button>
+                  <div className="text-left leading-none">
+                    <p className="text-xl font-black">{cartTotal.toLocaleString()} IQD</p>
+                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1">Review Order / مراجعة الطلب</p>
+                  </div>
+                </div>
+                <div className="pr-8 font-black text-[11px] uppercase tracking-[0.2em] italic">GO / اطلب 🔥</div>
+              </button>
             </div>
           )}
 
-          {/* FINAL CHECKOUT SHEET */}
+          {/* CHECKOUT MODAL - Big Inputs */}
           {isCheckoutOpen && (
-            <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-md flex items-end justify-center p-4">
-               <div className="bg-white w-full max-w-xl rounded-[3.5rem] p-10 shadow-2xl animate-in slide-in-from-bottom-full duration-500" dir="rtl">
-                  <div className="flex justify-between items-center mb-8">
-                     <h2 className="text-3xl font-black italic">تاكيد الطلب 📝</h2>
-                     <button onClick={() => setIsCheckoutOpen(false)} className="w-12 h-12 bg-slate-100 rounded-full font-black text-2xl flex items-center justify-center">×</button>
-                  </div>
-                  
-                  <div className="space-y-4 mb-8">
-                     <div className="bg-slate-50 p-6 rounded-[2.5rem] border-2 border-slate-100 space-y-3">
-                        {Object.entries(cart).map(([id, q]) => (
-                          <div key={id} className="flex justify-between font-bold text-sm">
-                             <span>{q}x {menuItems.find(m=>m.id===id)?.name}</span>
-                             <span className="opacity-50">{(menuItems.find(m=>m.id===id)?.salePrice || menuItems.find(m=>m.id===id)?.price) * q} د.ع</span>
-                          </div>
-                        ))}
-                        <div className="pt-4 mt-4 border-t-2 border-slate-200 flex justify-between items-center">
-                           <span className="font-black text-lg">المجموع النهائي:</span>
-                           <span className="text-3xl font-black" style={{ color: settings.primaryColor }}>{cartTotal.toLocaleString()} د.ع</span>
+            <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md p-4">
+              <div className="bg-white w-full max-w-xl rounded-[4rem] p-10 shadow-2xl animate-in slide-in-from-bottom-20" dir="rtl">
+                <div className="flex justify-between items-center mb-10">
+                  <h2 className="text-4xl font-black italic uppercase tracking-tighter">إتمام الطلب 📝</h2>
+                  <button onClick={() => setIsCheckoutOpen(false)} className="w-14 h-14 bg-slate-100 rounded-full font-black text-3xl flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-colors">×</button>
+                </div>
+                <div className="bg-slate-50 p-7 rounded-[3rem] border-2 border-slate-100 mb-8 space-y-3">
+                    {Object.entries(cart).map(([id, q]) => {
+                      const item = menuItems.find(m => m.id === id);
+                      return item && (
+                        <div key={id} className="flex justify-between text-sm font-black uppercase tracking-tight">
+                          <span className="text-slate-900">{q}x {item.name}</span>
+                          <span className="opacity-40">{( (item.salePrice || item.price) * q).toLocaleString()} د.ع</span>
                         </div>
-                     </div>
-
-                     <div className="grid grid-cols-1 gap-4">
-                        <input className="w-full p-5 bg-slate-50 rounded-[1.5rem] border-2 border-slate-100 font-bold text-lg" placeholder="اسمك الكريم" value={customerName} onChange={e=>setCustomerName(e.target.value)} />
-                        <input className="w-full p-5 bg-slate-50 rounded-[1.5rem] border-2 border-slate-100 font-bold text-lg" placeholder="رقم الموبايل" value={customerPhone} onChange={e=>setCustomerPhone(e.target.value)} />
-                        <textarea className="w-full p-5 bg-slate-50 rounded-[1.5rem] border-2 border-slate-100 font-bold text-lg h-32 resize-none" placeholder="العنوان (مثال: حي الحسين - قرب جامع ...)" value={address} onChange={e=>setAddress(e.target.value)} />
-                     </div>
-                  </div>
-
-                  <button 
-                    disabled={!customerName || !customerPhone || !address}
-                    onClick={() => {
-                      const text = `🔥 طلب جديد من ${settings.restaurantName} 🔥\n\n👤 الاسم: ${customerName}\n📞 الموبايل: ${customerPhone}\n📍 العنوان: ${address}\n\n🛒 الوجبات:\n${Object.entries(cart).map(([id, q]) => `${q}x ${menuItems.find(m=>m.id===id)?.name}`).join('\n')}\n\n💰 المجموع الكلي: ${cartTotal.toLocaleString()} د.ع`;
-                      window.open(`https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(text)}`);
-                    }}
-                    className="w-full py-6 bg-[#25D366] text-white rounded-[2rem] font-black text-xl shadow-2xl shadow-[#25D366]/40 hover:scale-[1.02] active:scale-95 transition-all"
-                  >
-                    إرسال الطلب (WhatsApp)
-                  </button>
-               </div>
+                      )
+                    })}
+                    <div className="border-t-2 border-slate-200 mt-5 pt-5 flex justify-between items-center">
+                      <span className="text-[12px] font-black uppercase opacity-40">المجموع النهائي</span>
+                      <span className="text-4xl font-black tracking-tighter" style={{ color: settings.primaryColor }}>{cartTotal.toLocaleString()} <span className="text-sm">دينار</span></span>
+                    </div>
+                </div>
+                <div className="space-y-4 mb-10">
+                  <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-6 bg-slate-50 rounded-3xl text-lg border-2 border-slate-100 font-black placeholder:opacity-30 outline-none focus:border-orange-500 transition-all" placeholder="الاسم الكامل" />
+                  <input type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="w-full p-6 bg-slate-50 rounded-3xl text-lg border-2 border-slate-100 font-black placeholder:opacity-30 outline-none focus:border-orange-500 transition-all" placeholder="رقم الهاتف" />
+                  <textarea value={address} onChange={e => setAddress(e.target.value)} className="w-full p-6 bg-slate-50 rounded-3xl text-lg h-32 border-2 border-slate-100 font-black placeholder:opacity-30 outline-none focus:border-orange-500 transition-all resize-none" placeholder="العنوان بالتفصيل (حي، زقاق، أقرب نقطة دالة)" />
+                </div>
+                <button 
+                  disabled={!address || !customerName || !customerPhone} 
+                  onClick={handleCheckout} 
+                  className="w-full py-7 bg-[#25D366] text-white font-black rounded-3xl text-[16px] uppercase tracking-widest shadow-[0_20px_40px_rgba(37,211,102,0.3)] hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 disabled:grayscale"
+                >
+                  إرسال عبر واتساب / Send Order
+                </button>
+              </div>
             </div>
           )}
         </div>
