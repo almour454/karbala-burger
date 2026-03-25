@@ -50,7 +50,7 @@ const appId = typeof window !== 'undefined' && window.__app_id
 const getMenuRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'menu');
 const getSettingsRef = () => doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
 
-// 🔑 UPDATED PASSWORD
+// 🔑 PASSWORD
 const OWNER_PASSWORD = "12345"; 
 
 export default function App() {
@@ -72,7 +72,6 @@ export default function App() {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   
-  // New Checkout Fields
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -85,6 +84,7 @@ export default function App() {
     restaurantName: "AL KARBALA BURGER",
     tagline: "Best Grill in the City",
     primaryColor: "#ea580c", 
+    bgColor: "#f8fafc", // New property for page background
     whatsapp: "964780000000",
     openingHours: "12:00 PM - 12:00 AM",
     locationDesc: "Karbala, City Center"
@@ -182,11 +182,6 @@ export default function App() {
     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id));
   };
 
-  const updateCloudItem = async (id, field, value) => {
-    const itemRef = doc(db, 'artifacts', appId, 'public', 'data', 'menu', id);
-    try { await updateDoc(itemRef, { [field]: value }); } catch (e) {}
-  };
-
   const addToCart = (item) => setCart(p => ({ ...p, [item.id]: (p[item.id] || 0) + 1 }));
   const removeFromCart = (id) => setCart(p => {
     const n = { ...p };
@@ -213,13 +208,10 @@ export default function App() {
     const text = `🔥 ${settings.restaurantName} ORDER 🔥\n\n👤 Name: ${customerName}\n📞 Phone: ${customerPhone}\n📍 Address: ${address}\n\n🛒 ORDER DETAILS:\n${items}\n\n💰 TOTAL: ${cartTotal.toLocaleString()} IQD`;
     const waUrl = `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(text)}`;
     window.open(waUrl);
-    // Optionally clear cart and close modal here
-    // setCart({});
-    // setIsCheckoutOpen(false);
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans selection:bg-orange-100 antialiased">
+    <div className="min-h-screen font-sans selection:bg-orange-100 antialiased transition-colors duration-500" style={{ backgroundColor: settings.bgColor }}>
       
       {/* 🛠 NAVIGATION */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] flex bg-black/90 backdrop-blur-md p-1.5 rounded-full border border-white/10 shadow-xl">
@@ -257,9 +249,8 @@ export default function App() {
           <div className="min-h-screen bg-slate-950 text-white p-6 pt-24 pb-40">
             <div className="max-w-4xl mx-auto space-y-10">
               
-              {/* Business Settings */}
               <section className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10">
-                <h3 className="text-sm font-black uppercase opacity-40 mb-6">Store Setup</h3>
+                <h3 className="text-sm font-black uppercase opacity-40 mb-6">Store Branding & Design</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Store Name" value={settings.restaurantName} onChange={e => updateSettings("restaurantName", e.target.value)} />
                   <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="WhatsApp Number" value={settings.whatsapp} onChange={e => updateSettings("whatsapp", e.target.value)} />
@@ -267,17 +258,21 @@ export default function App() {
                   <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Location" value={settings.locationDesc} onChange={e => updateSettings("locationDesc", e.target.value)} />
                   
                   {/* Theme Color Picker */}
-                  <div className="md:col-span-2 flex items-center justify-between bg-black/40 border border-white/10 p-4 rounded-xl">
-                    <div>
-                      <p className="text-sm font-bold">Brand Theme Color</p>
-                      <p className="text-[10px] opacity-50">Click the color square to change</p>
+                  <div className="flex items-center justify-between bg-black/40 border border-white/10 p-4 rounded-xl">
+                    <div className="pr-2">
+                      <p className="text-sm font-bold">Accent Color</p>
+                      <p className="text-[10px] opacity-50">(Buttons/Badges)</p>
                     </div>
-                    <input 
-                      type="color" 
-                      value={settings.primaryColor} 
-                      onChange={e => updateSettings("primaryColor", e.target.value)}
-                      className="w-12 h-12 rounded cursor-pointer border-0 bg-transparent"
-                    />
+                    <input type="color" value={settings.primaryColor} onChange={e => updateSettings("primaryColor", e.target.value)} className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent" />
+                  </div>
+
+                  {/* Background Color Picker */}
+                  <div className="flex items-center justify-between bg-black/40 border border-white/10 p-4 rounded-xl">
+                    <div className="pr-2">
+                      <p className="text-sm font-bold">App Background</p>
+                      <p className="text-[10px] opacity-50">(Customer View)</p>
+                    </div>
+                    <input type="color" value={settings.bgColor} onChange={e => updateSettings("bgColor", e.target.value)} className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent" />
                   </div>
                 </div>
               </section>
@@ -298,7 +293,7 @@ export default function App() {
                 </div>
               </section>
 
-              {/* Add Item with Discount Tab Logic */}
+              {/* Add Item */}
               <section className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10">
                 <h3 className="text-sm font-black uppercase opacity-40 mb-6">New Item</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -307,11 +302,11 @@ export default function App() {
                     {categories.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                   <div className="grid grid-cols-2 gap-2">
-                    <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Normal Price" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
-                    <input className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl text-sm text-orange-400 placeholder:text-orange-900" placeholder="Discount Price" value={newItem.salePrice} onChange={e => setNewItem({...newItem, salePrice: e.target.value})} />
+                    <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Price" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
+                    <input className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl text-sm text-orange-400 placeholder:text-orange-900" placeholder="Sale Price (Optional)" value={newItem.salePrice} onChange={e => setNewItem({...newItem, salePrice: e.target.value})} />
                   </div>
-                  <input className="md:col-span-2 bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Image Link" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
-                  <button onClick={addNewItem} className="md:col-span-2 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-opacity hover:opacity-90" style={{ backgroundColor: settings.primaryColor }}>Save to Menu</button>
+                  <input className="md:col-span-2 bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Image URL" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
+                  <button onClick={addNewItem} className="md:col-span-2 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest" style={{ backgroundColor: settings.primaryColor }}>Save Item</button>
                 </div>
               </section>
 
@@ -323,13 +318,10 @@ export default function App() {
                       <img src={item.image} className="w-12 h-12 rounded-lg object-cover bg-slate-800" />
                       <div>
                         <p className="font-bold text-xs uppercase">{item.name}</p>
-                        <p className="text-[10px] opacity-40">
-                          {item.category} • {item.price} IQD 
-                          {item.salePrice && <span className="text-orange-500 ml-2">Sale: {item.salePrice} IQD</span>}
-                        </p>
+                        <p className="text-[10px] opacity-40">{item.category} • {item.price} IQD</p>
                       </div>
                     </div>
-                    <button onClick={() => deleteItem(item.id)} className="text-red-500 text-[10px] font-black uppercase px-4 hover:scale-110 transition-transform">Delete</button>
+                    <button onClick={() => deleteItem(item.id)} className="text-red-500 text-[10px] font-black uppercase px-4">Delete</button>
                   </div>
                 ))}
               </div>
@@ -338,47 +330,60 @@ export default function App() {
         )
       ) : (
         <div className="pb-40">
-          {/* Header */}
-          <header className="pt-24 pb-8 px-6 text-center bg-white">
-             <h1 className="text-4xl font-black italic uppercase tracking-tighter leading-tight">
+          {/* Header with Address & Time */}
+          <header className="pt-24 pb-12 px-6 text-center">
+             <h1 className="text-5xl font-black italic uppercase tracking-tighter leading-tight drop-shadow-sm">
                 {settings.restaurantName}
              </h1>
-             <p className="text-slate-400 text-[9px] font-black tracking-[0.6em] uppercase mt-2">{settings.tagline}</p>
+             <p className="text-slate-400 text-[9px] font-black tracking-[0.4em] uppercase mt-2">{settings.tagline}</p>
+             <div className="mt-6 flex flex-col items-center gap-1.5">
+                <div className="flex items-center gap-2 bg-black/5 px-4 py-1.5 rounded-full border border-black/5">
+                   <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                   <span className="text-[10px] font-black uppercase opacity-70 tracking-widest">{settings.openingHours}</span>
+                </div>
+                <div className="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-1">
+                   📍 {settings.locationDesc}
+                </div>
+             </div>
           </header>
 
-          {/* 🔥 DISCOUNTS WINDOW (Horizontal Slider) */}
+          {/* 🔥 HOT DEALS */}
           {discountItems.length > 0 && (
-            <section className="bg-white pt-2 pb-6">
+            <section className="pt-2 pb-10">
               <div className="max-w-6xl mx-auto">
-                <div className="px-6 flex items-center justify-between mb-4">
-                  <h2 className="text-[11px] font-black uppercase tracking-widest text-orange-600">🔥 Hot Deals Today</h2>
+                <div className="px-6 flex items-center gap-3 mb-4">
+                  <div className="flex space-x-0.5">
+                    <div className="w-1.5 h-4 bg-orange-500 rounded-full animate-bounce"></div>
+                    <div className="w-1.5 h-6 bg-orange-500 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                    <div className="w-1.5 h-4 bg-orange-500 rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                  </div>
+                  <h2 className="text-[13px] font-black uppercase tracking-tighter italic" style={{ color: settings.primaryColor }}>Hot Deals This Week</h2>
                 </div>
-                <div className="flex gap-4 px-6 overflow-x-auto no-scrollbar pb-4 snap-x">
+                <div className="flex gap-5 px-6 overflow-x-auto no-scrollbar pb-6 snap-x">
                   {discountItems.map(item => (
-                    <div key={item.id} className="snap-start shrink-0 w-72 bg-orange-500 rounded-[2rem] p-5 text-white relative overflow-hidden shadow-lg shadow-orange-500/20" style={{ backgroundColor: settings.primaryColor }}>
+                    <div key={item.id} className="snap-start shrink-0 w-80 rounded-[2.5rem] p-6 text-white relative overflow-hidden shadow-2xl shadow-black/10 transition-transform active:scale-95" style={{ backgroundColor: settings.primaryColor }}>
                       <div className="relative z-10">
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="bg-white text-[8px] font-black px-3 py-1 rounded-full uppercase" style={{ color: settings.primaryColor }}>
-                            Save {(item.price - item.salePrice).toLocaleString()} IQD
+                        <div className="mb-4">
+                          <span className="bg-white/20 backdrop-blur-md text-[9px] font-black px-4 py-2 rounded-full uppercase border border-white/30">
+                            HUGE SAVE: {(item.price - item.salePrice).toLocaleString()} IQD
                           </span>
                         </div>
-                        <h3 className="text-xl font-black italic uppercase leading-tight mb-6">{item.name}</h3>
+                        <h3 className="text-2xl font-black italic uppercase leading-none mb-8 tracking-tighter">{item.name}</h3>
                         <div className="flex justify-between items-end">
                           <div>
-                             <p className="text-[10px] opacity-70 line-through mb-1">{item.price.toLocaleString()} IQD</p>
-                             <p className="text-2xl font-black">{item.salePrice.toLocaleString()} <span className="text-[10px]">IQD</span></p>
+                             <p className="text-xs font-bold opacity-60 line-through decoration-white/50 decoration-2 mb-1">{item.price.toLocaleString()} IQD</p>
+                             <p className="text-3xl font-black tracking-tighter">{item.salePrice.toLocaleString()} <span className="text-xs">IQD</span></p>
                           </div>
                           <button 
                             onClick={() => addToCart(item)}
-                            className="bg-white w-12 h-12 rounded-full flex items-center justify-center font-black shadow-lg shadow-black/10 active:scale-90 transition-transform hover:scale-105"
+                            className="bg-white w-14 h-14 rounded-full flex items-center justify-center font-black shadow-2xl shadow-black/20 hover:scale-110 active:rotate-45 transition-all text-2xl"
                             style={{ color: settings.primaryColor }}
                           >
                             ＋
                           </button>
                         </div>
                       </div>
-                      {/* Decorative Background Image Overlay */}
-                      <img src={item.image} className="absolute top-0 right-0 w-40 h-40 object-cover opacity-20 -mr-8 -mt-8 rounded-full rotate-12" />
+                      <img src={item.image} className="absolute -top-4 -right-4 w-44 h-44 object-cover opacity-25 -rotate-12 rounded-[3rem]" />
                     </div>
                   ))}
                 </div>
@@ -386,12 +391,12 @@ export default function App() {
             </section>
           )}
 
-          {/* 🍔 CATEGORY SELECTOR (Horizontal Scroll) */}
-          <div className="sticky top-[68px] z-[900] bg-slate-50/80 backdrop-blur-lg py-4 border-b border-slate-200">
+          {/* 🍔 CATEGORY SELECTOR */}
+          <div className="sticky top-[68px] z-[900] py-4 bg-inherit backdrop-blur-md">
             <div className="max-w-6xl mx-auto flex gap-2 px-6 overflow-x-auto no-scrollbar">
               <button 
                 onClick={() => setActiveCategory("All")}
-                className={`shrink-0 px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeCategory === "All" ? 'bg-black text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-100'}`}
+                className={`shrink-0 px-7 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeCategory === "All" ? 'bg-black text-white' : 'bg-white/40 border border-black/5 text-slate-500 hover:bg-white'}`}
               >
                 All
               </button>
@@ -399,7 +404,7 @@ export default function App() {
                 <button 
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
-                  className={`shrink-0 px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeCategory === cat ? 'text-white shadow-md' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-100'}`}
+                  className={`shrink-0 px-7 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeCategory === cat ? 'text-white shadow-lg' : 'bg-white/40 border border-black/5 text-slate-500 hover:bg-white'}`}
                   style={activeCategory === cat ? { backgroundColor: settings.primaryColor } : {}}
                 >
                   {cat}
@@ -408,150 +413,105 @@ export default function App() {
             </div>
           </div>
 
-          {/* 💻 & 📱 RESPONSIVE GRID LIST VIEW */}
-          <main className="max-w-6xl mx-auto px-6 py-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredItems.length === 0 ? (
-              <div className="col-span-full text-center py-20 opacity-30">
-                <p className="font-black uppercase text-xs">Nothing in {activeCategory} yet...</p>
-              </div>
-            ) : (
-              filteredItems.map(item => (
-                <div key={item.id} className="bg-white rounded-[2rem] p-3 flex gap-4 border border-slate-100 shadow-sm hover:shadow-md transition-shadow items-center h-full">
-                  <div className="w-24 h-24 shrink-0 rounded-[1.5rem] overflow-hidden bg-slate-50">
-                    <img src={item.image || 'https://via.placeholder.com/200'} className="w-full h-full object-cover" loading="lazy" />
+          {/* RESPONSIVE GRID */}
+          <main className="max-w-6xl mx-auto px-6 py-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredItems.map(item => (
+              <div key={item.id} className="group bg-white rounded-[2.5rem] p-4 flex gap-4 border border-black/5 shadow-sm hover:shadow-xl transition-all items-center">
+                <div className="w-28 h-28 shrink-0 rounded-[2rem] overflow-hidden bg-slate-50 relative">
+                  <img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                  {item.salePrice && <div className="absolute top-2 right-2 bg-red-500 text-white text-[7px] font-black px-2 py-1 rounded-full uppercase">Hot</div>}
+                </div>
+                <div className="flex-1 flex flex-col justify-between py-1 h-28">
+                  <div>
+                    <h3 className="text-sm font-black uppercase italic tracking-tight">{item.name}</h3>
+                    <p className="text-[10px] text-slate-400 font-bold leading-tight line-clamp-2 mt-1">{item.desc || "A taste of Karbala's finest."}</p>
                   </div>
-                  <div className="flex-1 py-1 pr-2 flex flex-col justify-between h-full">
+                  
+                  <div className="flex justify-between items-end">
                     <div>
-                      <div className="flex justify-between items-start mb-1">
-                        <h3 className="text-sm font-black uppercase italic tracking-tight leading-tight">{item.name}</h3>
-                        {item.salePrice && <span className="bg-orange-100 text-[7px] font-black px-2 py-0.5 rounded-full uppercase" style={{ color: settings.primaryColor }}>Sale</span>}
-                      </div>
-                      <p className="text-[10px] text-slate-400 font-bold mb-3 line-clamp-2">{item.desc || "Prepared fresh daily."}</p>
-                    </div>
-                    
-                    <div className="flex justify-between items-end">
-                      <div>
-                        {item.salePrice ? (
-                          <div className="flex flex-col">
-                            <span className="text-[8px] text-slate-300 line-through leading-none mb-0.5">{item.price.toLocaleString()} IQD</span>
-                            <p className="font-black text-sm" style={{ color: settings.primaryColor }}>
-                              {item.salePrice.toLocaleString()} <span className="text-[8px] opacity-60">IQD</span>
-                            </p>
-                          </div>
-                        ) : (
+                      {item.salePrice ? (
+                        <div className="flex flex-col">
+                          <span className="text-[8px] text-slate-300 line-through decoration-red-400 decoration-1 mb-0.5">{item.price.toLocaleString()} IQD</span>
                           <p className="font-black text-sm" style={{ color: settings.primaryColor }}>
-                            {item.price.toLocaleString()} <span className="text-[8px] opacity-60">IQD</span>
+                            {item.salePrice.toLocaleString()} <span className="text-[8px]">IQD</span>
                           </p>
-                        )}
-                      </div>
-                      
-                      {cart[item.id] ? (
-                        <div className="flex items-center bg-slate-900 text-white rounded-xl p-0.5 scale-90 origin-right">
-                          <button onClick={() => removeFromCart(item.id)} className="w-8 h-8 font-black hover:bg-slate-800 rounded-lg">－</button>
-                          <span className="w-6 text-center font-black text-[11px]">{cart[item.id]}</span>
-                          <button onClick={() => addToCart(item)} className="w-8 h-8 font-black hover:bg-slate-800 rounded-lg">＋</button>
                         </div>
                       ) : (
-                        <button 
-                          onClick={() => addToCart(item)} 
-                          className="px-4 py-2 bg-slate-50 rounded-xl font-black uppercase text-[9px] tracking-wider border border-slate-100 active:bg-black active:text-white hover:bg-slate-100 transition-colors"
-                        >
-                          Add +
-                        </button>
+                        <p className="font-black text-sm" style={{ color: settings.primaryColor }}>
+                          {item.price.toLocaleString()} <span className="text-[8px]">IQD</span>
+                        </p>
                       )}
                     </div>
+                    
+                    {cart[item.id] ? (
+                      <div className="flex items-center bg-black text-white rounded-2xl p-0.5">
+                        <button onClick={() => removeFromCart(item.id)} className="w-7 h-7 font-black hover:bg-white/10 rounded-xl">－</button>
+                        <span className="w-5 text-center font-black text-[10px]">{cart[item.id]}</span>
+                        <button onClick={() => addToCart(item)} className="w-7 h-7 font-black hover:bg-white/10 rounded-xl">＋</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => addToCart(item)} className="px-5 py-2.5 bg-slate-50 rounded-2xl font-black uppercase text-[8px] tracking-widest border border-slate-100 hover:bg-black hover:text-white transition-all">
+                        Add +
+                      </button>
+                    )}
                   </div>
                 </div>
-              ))
-            )}
+              </div>
+            ))}
           </main>
 
-          {/* 🛒 FLOATING CART TOTAL */}
+          {/* CART TOTAL */}
           {cartTotal > 0 && (
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-sm px-4">
               <button 
                 onClick={() => setIsCheckoutOpen(true)} 
-                className="w-full bg-slate-950 text-white p-2 rounded-full shadow-2xl flex items-center justify-between hover:scale-[1.02] transition-transform"
+                className="w-full bg-slate-950 text-white p-2.5 rounded-full shadow-2xl flex items-center justify-between hover:scale-[1.03] active:scale-95 transition-all"
               >
                 <div className="flex items-center gap-3 pl-2">
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center font-black text-lg" style={{ backgroundColor: settings.primaryColor }}>
+                  <div className="w-11 h-11 rounded-full flex items-center justify-center font-black text-base" style={{ backgroundColor: settings.primaryColor }}>
                     {Object.values(cart).reduce((a,b)=>a+b,0)}
                   </div>
-                  <div className="text-left">
-                    <p className="text-[11px] font-black">{cartTotal.toLocaleString()} IQD</p>
-                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">In your tray</p>
+                  <div className="text-left leading-tight">
+                    <p className="text-xs font-black">{cartTotal.toLocaleString()} IQD</p>
+                    <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest">Order Summary</p>
                   </div>
                 </div>
-                <div className="pr-6 font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2">
-                  Checkout <span className="text-lg leading-none">→</span>
-                </div>
+                <div className="pr-6 font-black text-[9px] uppercase tracking-[0.2em]">Checkout →</div>
               </button>
             </div>
           )}
 
-          {/* 🚀 UPGRADED CHECKOUT MODAL */}
+          {/* CHECKOUT MODAL */}
           {isCheckoutOpen && (
-            <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 sm:p-6 overflow-y-auto">
-              <div className="bg-white w-full max-w-md rounded-[2.5rem] p-6 sm:p-8 animate-in slide-in-from-bottom-20 my-auto shadow-2xl">
-                
+            <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+              <div className="bg-white w-full max-w-md rounded-[3rem] p-8 shadow-2xl animate-in slide-in-from-bottom-20">
                 <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-black italic uppercase tracking-tighter">Complete Order</h2>
-                  <button onClick={() => setIsCheckoutOpen(false)} className="w-8 h-8 bg-slate-100 text-slate-500 rounded-full font-bold flex items-center justify-center hover:bg-slate-200">×</button>
+                  <h2 className="text-2xl font-black italic uppercase tracking-tighter">Checkout</h2>
+                  <button onClick={() => setIsCheckoutOpen(false)} className="w-9 h-9 bg-slate-100 rounded-full font-bold flex items-center justify-center">×</button>
                 </div>
-
-                {/* Order Summary */}
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-6">
-                  <h3 className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Your Items</h3>
-                  <div className="max-h-32 overflow-y-auto no-scrollbar space-y-2 mb-3">
+                <div className="bg-slate-50 p-5 rounded-[2rem] border border-slate-100 mb-6 space-y-2">
                     {Object.entries(cart).map(([id, q]) => {
                       const item = menuItems.find(m => m.id === id);
-                      if (!item) return null;
-                      return (
-                        <div key={id} className="flex justify-between items-center text-sm font-bold">
-                          <span><span className="text-slate-400 mr-2">{q}x</span> {item.name}</span>
-                          <span>{((item.salePrice || item.price) * q).toLocaleString()}</span>
+                      return item && (
+                        <div key={id} className="flex justify-between text-[11px] font-bold uppercase tracking-tight">
+                          <span>{q}x {item.name}</span>
+                          <span className="opacity-40">{((item.salePrice || item.price) * q).toLocaleString()} IQD</span>
                         </div>
                       )
                     })}
-                  </div>
-                  <div className="flex justify-between items-center pt-3 border-t border-slate-200">
-                    <span className="text-xs font-black uppercase">Total:</span>
-                    <span className="text-lg font-black" style={{ color: settings.primaryColor }}>{cartTotal.toLocaleString()} IQD</span>
-                  </div>
+                    <div className="border-t border-slate-200 mt-3 pt-3 flex justify-between items-end">
+                      <span className="text-[9px] font-black uppercase opacity-40">Total Amount</span>
+                      <span className="text-2xl font-black" style={{ color: settings.primaryColor }}>{cartTotal.toLocaleString()} IQD</span>
+                    </div>
                 </div>
-
-                {/* Customer Details Form */}
                 <div className="space-y-3 mb-6">
-                  <input 
-                    type="text"
-                    value={customerName} 
-                    onChange={e => setCustomerName(e.target.value)} 
-                    className="w-full p-4 bg-slate-50 rounded-2xl text-sm outline-none border border-slate-100 focus:border-slate-300 font-bold placeholder:text-slate-400" 
-                    placeholder="Your Full Name" 
-                  />
-                  <input 
-                    type="tel"
-                    value={customerPhone} 
-                    onChange={e => setCustomerPhone(e.target.value)} 
-                    className="w-full p-4 bg-slate-50 rounded-2xl text-sm outline-none border border-slate-100 focus:border-slate-300 font-bold placeholder:text-slate-400" 
-                    placeholder="Phone Number (e.g. 078...)" 
-                  />
-                  <textarea 
-                    value={address} 
-                    onChange={e => setAddress(e.target.value)} 
-                    className="w-full p-4 bg-slate-50 rounded-2xl text-sm h-24 outline-none border border-slate-100 focus:border-slate-300 font-bold placeholder:text-slate-400 resize-none" 
-                    placeholder="Delivery Address (Street / Building / House No.)" 
-                  />
+                  <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl text-sm border border-slate-100 font-bold placeholder:opacity-30" placeholder="Full Name" />
+                  <input type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl text-sm border border-slate-100 font-bold placeholder:opacity-30" placeholder="Phone Number" />
+                  <textarea value={address} onChange={e => setAddress(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl text-sm h-24 border border-slate-100 font-bold placeholder:opacity-30 resize-none" placeholder="Detailed Address..." />
                 </div>
-
-                <button 
-                  disabled={!address.trim() || !customerName.trim() || !customerPhone.trim()} 
-                  onClick={handleCheckout} 
-                  className="w-full py-5 bg-[#25D366] text-white font-black rounded-2xl text-[10px] uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#20bd5a] transition-colors shadow-lg shadow-[#25D366]/30"
-                >
-                  Send Order via WhatsApp
+                <button disabled={!address || !customerName || !customerPhone} onClick={handleCheckout} className="w-full py-5 bg-[#25D366] text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-[#25D366]/30">
+                  Send to WhatsApp
                 </button>
-                
               </div>
             </div>
           )}
