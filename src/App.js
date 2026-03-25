@@ -38,7 +38,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// SPEED BOOST: Enable Offline Persistence
 try {
   enableIndexedDbPersistence(db).catch(() => {});
 } catch (e) {}
@@ -50,23 +49,15 @@ const appId = typeof window !== 'undefined' && window.__app_id
 const getMenuRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'menu');
 const getSettingsRef = () => doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
 
-// 🔑 PASSWORD
 const OWNER_PASSWORD = "12345"; 
 
 export default function App() {
   const [view, setView] = useState("customer"); 
   const [user, setUser] = useState(null);
-  const [activeCategory, setActiveCategory] = useState("All");
+  const [activeCategory, setActiveCategory] = useState("الكل");
   
-  const [menuItems, setMenuItems] = useState(() => {
-    const saved = localStorage.getItem('kb_menu_cache');
-    return saved ? JSON.parse(saved) : [];
-  });
-  
-  const [categories, setCategories] = useState(() => {
-    const saved = localStorage.getItem('kb_cat_cache');
-    return saved ? JSON.parse(saved) : ["Burgers", "Drinks", "Mandi"];
-  });
+  const [menuItems, setMenuItems] = useState([]);
+  const [categories, setCategories] = useState(["برجر", "مقبلات", "مشروبات"]);
 
   const [cart, setCart] = useState({});
   const [dataLoaded, setDataLoaded] = useState(false);
@@ -82,15 +73,16 @@ export default function App() {
 
   const [settings, setSettings] = useState({
     restaurantName: "AL KARBALA BURGER",
+    restaurantNameAr: "برجر كربلاء",
     tagline: "Best Grill in the City",
     primaryColor: "#ea580c", 
-    bgColor: "#f8fafc", // New property for page background
+    bgColor: "#f8fafc",
     whatsapp: "964780000000",
     openingHours: "12:00 PM - 12:00 AM",
     locationDesc: "Karbala, City Center"
   });
 
-  const [newItem, setNewItem] = useState({ name: "", price: "", salePrice: "", desc: "", image: "", category: "Burgers" });
+  const [newItem, setNewItem] = useState({ name: "", price: "", salePrice: "", desc: "", image: "", category: "برجر" });
   const [newCatInput, setNewCatInput] = useState("");
 
   useEffect(() => {
@@ -126,16 +118,12 @@ export default function App() {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setMenuItems(data);
       setDataLoaded(true);
-      localStorage.setItem('kb_menu_cache', JSON.stringify(data));
-    }, () => setDataLoaded(true));
+    });
 
     const unsubSettings = onSnapshot(getSettingsRef(), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        if (Array.isArray(data.categories)) {
-           setCategories(data.categories);
-           localStorage.setItem('kb_cat_cache', JSON.stringify(data.categories));
-        }
+        if (Array.isArray(data.categories)) setCategories(data.categories);
         setSettings(prev => ({ ...prev, ...data }));
       }
     });
@@ -195,7 +183,7 @@ export default function App() {
   }, 0), [cart, menuItems]);
 
   const filteredItems = useMemo(() => {
-    if (activeCategory === "All") return menuItems;
+    if (activeCategory === "الكل") return menuItems;
     return menuItems.filter(item => item.category === activeCategory);
   }, [menuItems, activeCategory]);
 
@@ -205,7 +193,7 @@ export default function App() {
 
   const handleCheckout = () => {
     const items = Object.entries(cart).map(([id, q]) => `${q}x ${menuItems.find(m=>m.id===id)?.name}`).join('\n');
-    const text = `🔥 ${settings.restaurantName} ORDER 🔥\n\n👤 Name: ${customerName}\n📞 Phone: ${customerPhone}\n📍 Address: ${address}\n\n🛒 ORDER DETAILS:\n${items}\n\n💰 TOTAL: ${cartTotal.toLocaleString()} IQD`;
+    const text = `🔥 ${settings.restaurantName} ORDER 🔥\n\n👤 الاسم: ${customerName}\n📞 الهاتف: ${customerPhone}\n📍 العنوان: ${address}\n\n🛒 التفاصيل:\n${items}\n\n💰 المجموع: ${cartTotal.toLocaleString()} IQD`;
     const waUrl = `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(text)}`;
     window.open(waUrl);
   };
@@ -220,7 +208,7 @@ export default function App() {
           className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'customer' ? 'text-white shadow-lg' : 'text-slate-400'}`}
           style={view === 'customer' ? { backgroundColor: settings.primaryColor } : {}}
         >
-          Menu
+          Menu / المنيو
         </button>
         <button 
           onClick={() => navigateTo("owner")}
@@ -252,34 +240,30 @@ export default function App() {
               <section className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10">
                 <h3 className="text-sm font-black uppercase opacity-40 mb-6">Store Branding & Design</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Store Name" value={settings.restaurantName} onChange={e => updateSettings("restaurantName", e.target.value)} />
+                  <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Store Name (EN)" value={settings.restaurantName} onChange={e => updateSettings("restaurantName", e.target.value)} />
+                  <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="اسم المطعم (عربي)" value={settings.restaurantNameAr} onChange={e => updateSettings("restaurantNameAr", e.target.value)} />
                   <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="WhatsApp Number" value={settings.whatsapp} onChange={e => updateSettings("whatsapp", e.target.value)} />
                   <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Opening Hours" value={settings.openingHours} onChange={e => updateSettings("openingHours", e.target.value)} />
                   <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Location" value={settings.locationDesc} onChange={e => updateSettings("locationDesc", e.target.value)} />
                   
-                  {/* Theme Color Picker */}
                   <div className="flex items-center justify-between bg-black/40 border border-white/10 p-4 rounded-xl">
                     <div className="pr-2">
                       <p className="text-sm font-bold">Accent Color</p>
-                      <p className="text-[10px] opacity-50">(Buttons/Badges)</p>
                     </div>
                     <input type="color" value={settings.primaryColor} onChange={e => updateSettings("primaryColor", e.target.value)} className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent" />
                   </div>
 
-                  {/* Background Color Picker */}
                   <div className="flex items-center justify-between bg-black/40 border border-white/10 p-4 rounded-xl">
                     <div className="pr-2">
                       <p className="text-sm font-bold">App Background</p>
-                      <p className="text-[10px] opacity-50">(Customer View)</p>
                     </div>
                     <input type="color" value={settings.bgColor} onChange={e => updateSettings("bgColor", e.target.value)} className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent" />
                   </div>
                 </div>
               </section>
 
-              {/* Category Management */}
               <section className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10">
-                <h3 className="text-sm font-black uppercase opacity-40 mb-6">Menu Categories</h3>
+                <h3 className="text-sm font-black uppercase opacity-40 mb-6">Categories / الاصناف</h3>
                 <div className="flex flex-wrap gap-2 mb-4">
                   {categories.map(c => (
                     <div key={c} className="bg-white/10 px-4 py-2 rounded-xl flex items-center gap-3 text-[10px] font-black uppercase">
@@ -288,55 +272,39 @@ export default function App() {
                   ))}
                 </div>
                 <div className="flex gap-2">
-                  <input className="flex-1 bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="New Category..." value={newCatInput} onChange={e => setNewCatInput(e.target.value)} />
+                  <input className="flex-1 bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="New Category (e.g. برجر)..." value={newCatInput} onChange={e => setNewCatInput(e.target.value)} />
                   <button onClick={addCategory} className="bg-white text-black px-6 rounded-xl font-black uppercase text-[10px]">Add</button>
                 </div>
               </section>
 
-              {/* Add Item */}
               <section className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10">
-                <h3 className="text-sm font-black uppercase opacity-40 mb-6">New Item</h3>
+                <h3 className="text-sm font-black uppercase opacity-40 mb-6">Add Item / اضافة وجبة</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <input className="md:col-span-2 bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Item Name" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                  <input className="md:col-span-2 bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Item Name (e.g. برجر لحم)" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
                   <select className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} >
                     {categories.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                   <div className="grid grid-cols-2 gap-2">
                     <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Price" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
-                    <input className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl text-sm text-orange-400 placeholder:text-orange-900" placeholder="Sale Price (Optional)" value={newItem.salePrice} onChange={e => setNewItem({...newItem, salePrice: e.target.value})} />
+                    <input className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl text-sm text-orange-400 placeholder:text-orange-900" placeholder="Sale Price" value={newItem.salePrice} onChange={e => setNewItem({...newItem, salePrice: e.target.value})} />
                   </div>
                   <input className="md:col-span-2 bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Image URL" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
                   <button onClick={addNewItem} className="md:col-span-2 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest" style={{ backgroundColor: settings.primaryColor }}>Save Item</button>
                 </div>
               </section>
-
-              {/* List Items */}
-              <div className="space-y-4">
-                {menuItems.map(item => (
-                  <div key={item.id} className="bg-white/5 p-4 rounded-2xl flex items-center justify-between border border-white/5">
-                    <div className="flex items-center gap-4">
-                      <img src={item.image} className="w-12 h-12 rounded-lg object-cover bg-slate-800" />
-                      <div>
-                        <p className="font-bold text-xs uppercase">{item.name}</p>
-                        <p className="text-[10px] opacity-40">{item.category} • {item.price} IQD</p>
-                      </div>
-                    </div>
-                    <button onClick={() => deleteItem(item.id)} className="text-red-500 text-[10px] font-black uppercase px-4">Delete</button>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
         )
       ) : (
         <div className="pb-40">
-          {/* Header with Address & Time */}
+          {/* Header with Arabic/English mix */}
           <header className="pt-24 pb-12 px-6 text-center">
              <h1 className="text-5xl font-black italic uppercase tracking-tighter leading-tight drop-shadow-sm">
                 {settings.restaurantName}
              </h1>
-             <p className="text-slate-400 text-[9px] font-black tracking-[0.4em] uppercase mt-2">{settings.tagline}</p>
-             <div className="mt-6 flex flex-col items-center gap-1.5">
+             <h2 className="text-3xl font-black text-slate-700/50 mt-1" style={{ fontFamily: 'sans-serif' }}>{settings.restaurantNameAr}</h2>
+             
+             <div className="mt-8 flex flex-col items-center gap-1.5">
                 <div className="flex items-center gap-2 bg-black/5 px-4 py-1.5 rounded-full border border-black/5">
                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
                    <span className="text-[10px] font-black uppercase opacity-70 tracking-widest">{settings.openingHours}</span>
@@ -351,13 +319,14 @@ export default function App() {
           {discountItems.length > 0 && (
             <section className="pt-2 pb-10">
               <div className="max-w-6xl mx-auto">
-                <div className="px-6 flex items-center gap-3 mb-4">
-                  <div className="flex space-x-0.5">
-                    <div className="w-1.5 h-4 bg-orange-500 rounded-full animate-bounce"></div>
-                    <div className="w-1.5 h-6 bg-orange-500 rounded-full animate-bounce [animation-delay:0.2s]"></div>
-                    <div className="w-1.5 h-4 bg-orange-500 rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                <div className="px-6 flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex space-x-0.5">
+                        <div className="w-1.5 h-4 bg-orange-500 rounded-full animate-bounce"></div>
+                        <div className="w-1.5 h-6 bg-orange-500 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                    </div>
+                    <h2 className="text-[14px] font-black uppercase tracking-tighter italic" style={{ color: settings.primaryColor }}>العروض الساخنة 🔥 Hot Deals</h2>
                   </div>
-                  <h2 className="text-[13px] font-black uppercase tracking-tighter italic" style={{ color: settings.primaryColor }}>Hot Deals This Week</h2>
                 </div>
                 <div className="flex gap-5 px-6 overflow-x-auto no-scrollbar pb-6 snap-x">
                   {discountItems.map(item => (
@@ -365,10 +334,10 @@ export default function App() {
                       <div className="relative z-10">
                         <div className="mb-4">
                           <span className="bg-white/20 backdrop-blur-md text-[9px] font-black px-4 py-2 rounded-full uppercase border border-white/30">
-                            HUGE SAVE: {(item.price - item.salePrice).toLocaleString()} IQD
+                            توفير: {(item.price - item.salePrice).toLocaleString()} IQD
                           </span>
                         </div>
-                        <h3 className="text-2xl font-black italic uppercase leading-none mb-8 tracking-tighter">{item.name}</h3>
+                        <h3 className="text-2xl font-black uppercase leading-tight mb-8 tracking-tighter">{item.name}</h3>
                         <div className="flex justify-between items-end">
                           <div>
                              <p className="text-xs font-bold opacity-60 line-through decoration-white/50 decoration-2 mb-1">{item.price.toLocaleString()} IQD</p>
@@ -391,20 +360,20 @@ export default function App() {
             </section>
           )}
 
-          {/* 🍔 CATEGORY SELECTOR */}
+          {/* 🍔 CATEGORY SELECTOR (Arabic Focused) */}
           <div className="sticky top-[68px] z-[900] py-4 bg-inherit backdrop-blur-md">
             <div className="max-w-6xl mx-auto flex gap-2 px-6 overflow-x-auto no-scrollbar">
               <button 
-                onClick={() => setActiveCategory("All")}
-                className={`shrink-0 px-7 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeCategory === "All" ? 'bg-black text-white' : 'bg-white/40 border border-black/5 text-slate-500 hover:bg-white'}`}
+                onClick={() => setActiveCategory("الكل")}
+                className={`shrink-0 px-8 py-3.5 rounded-full text-[12px] font-black transition-all ${activeCategory === "الكل" ? 'bg-black text-white' : 'bg-white/40 border border-black/5 text-slate-500 hover:bg-white'}`}
               >
-                All
+                الكل
               </button>
               {categories.map(cat => (
                 <button 
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
-                  className={`shrink-0 px-7 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeCategory === cat ? 'text-white shadow-lg' : 'bg-white/40 border border-black/5 text-slate-500 hover:bg-white'}`}
+                  className={`shrink-0 px-8 py-3.5 rounded-full text-[12px] font-black transition-all ${activeCategory === cat ? 'text-white shadow-lg' : 'bg-white/40 border border-black/5 text-slate-500 hover:bg-white'}`}
                   style={activeCategory === cat ? { backgroundColor: settings.primaryColor } : {}}
                 >
                   {cat}
@@ -413,21 +382,20 @@ export default function App() {
             </div>
           </div>
 
-          {/* RESPONSIVE GRID */}
-          <main className="max-w-6xl mx-auto px-6 py-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {/* GRID */}
+          <main className="max-w-6xl mx-auto px-6 py-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" dir="rtl">
             {filteredItems.map(item => (
-              <div key={item.id} className="group bg-white rounded-[2.5rem] p-4 flex gap-4 border border-black/5 shadow-sm hover:shadow-xl transition-all items-center">
+              <div key={item.id} className="group bg-white rounded-[2.5rem] p-4 flex gap-4 border border-black/5 shadow-sm hover:shadow-xl transition-all items-center text-right">
                 <div className="w-28 h-28 shrink-0 rounded-[2rem] overflow-hidden bg-slate-50 relative">
                   <img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                  {item.salePrice && <div className="absolute top-2 right-2 bg-red-500 text-white text-[7px] font-black px-2 py-1 rounded-full uppercase">Hot</div>}
                 </div>
                 <div className="flex-1 flex flex-col justify-between py-1 h-28">
                   <div>
-                    <h3 className="text-sm font-black uppercase italic tracking-tight">{item.name}</h3>
-                    <p className="text-[10px] text-slate-400 font-bold leading-tight line-clamp-2 mt-1">{item.desc || "A taste of Karbala's finest."}</p>
+                    <h3 className="text-sm font-black uppercase tracking-tight">{item.name}</h3>
+                    <p className="text-[10px] text-slate-400 font-bold leading-tight line-clamp-2 mt-1" dir="ltr">{item.desc || "Delicious grill special"}</p>
                   </div>
                   
-                  <div className="flex justify-between items-end">
+                  <div className="flex justify-between items-end flex-row-reverse">
                     <div>
                       {item.salePrice ? (
                         <div className="flex flex-col">
@@ -450,8 +418,8 @@ export default function App() {
                         <button onClick={() => addToCart(item)} className="w-7 h-7 font-black hover:bg-white/10 rounded-xl">＋</button>
                       </div>
                     ) : (
-                      <button onClick={() => addToCart(item)} className="px-5 py-2.5 bg-slate-50 rounded-2xl font-black uppercase text-[8px] tracking-widest border border-slate-100 hover:bg-black hover:text-white transition-all">
-                        Add +
+                      <button onClick={() => addToCart(item)} className="px-5 py-2.5 bg-slate-50 rounded-2xl font-black text-[10px] border border-slate-100 hover:bg-black hover:text-white transition-all">
+                        اضافة +
                       </button>
                     )}
                   </div>
@@ -473,10 +441,10 @@ export default function App() {
                   </div>
                   <div className="text-left leading-tight">
                     <p className="text-xs font-black">{cartTotal.toLocaleString()} IQD</p>
-                    <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest">Order Summary</p>
+                    <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest">Order Summary / اتمام الطلب</p>
                   </div>
                 </div>
-                <div className="pr-6 font-black text-[9px] uppercase tracking-[0.2em]">Checkout →</div>
+                <div className="pr-6 font-black text-[9px] uppercase tracking-[0.2em]">Go / اذهب →</div>
               </button>
             </div>
           )}
@@ -484,9 +452,9 @@ export default function App() {
           {/* CHECKOUT MODAL */}
           {isCheckoutOpen && (
             <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-              <div className="bg-white w-full max-w-md rounded-[3rem] p-8 shadow-2xl animate-in slide-in-from-bottom-20">
+              <div className="bg-white w-full max-w-md rounded-[3rem] p-8 shadow-2xl animate-in slide-in-from-bottom-20" dir="rtl">
                 <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-black italic uppercase tracking-tighter">Checkout</h2>
+                  <h2 className="text-2xl font-black italic uppercase tracking-tighter">تاكيد الطلب</h2>
                   <button onClick={() => setIsCheckoutOpen(false)} className="w-9 h-9 bg-slate-100 rounded-full font-bold flex items-center justify-center">×</button>
                 </div>
                 <div className="bg-slate-50 p-5 rounded-[2rem] border border-slate-100 mb-6 space-y-2">
@@ -500,17 +468,17 @@ export default function App() {
                       )
                     })}
                     <div className="border-t border-slate-200 mt-3 pt-3 flex justify-between items-end">
-                      <span className="text-[9px] font-black uppercase opacity-40">Total Amount</span>
+                      <span className="text-[9px] font-black uppercase opacity-40">المجموع الكلي</span>
                       <span className="text-2xl font-black" style={{ color: settings.primaryColor }}>{cartTotal.toLocaleString()} IQD</span>
                     </div>
                 </div>
                 <div className="space-y-3 mb-6">
-                  <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl text-sm border border-slate-100 font-bold placeholder:opacity-30" placeholder="Full Name" />
-                  <input type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl text-sm border border-slate-100 font-bold placeholder:opacity-30" placeholder="Phone Number" />
-                  <textarea value={address} onChange={e => setAddress(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl text-sm h-24 border border-slate-100 font-bold placeholder:opacity-30 resize-none" placeholder="Detailed Address..." />
+                  <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl text-sm border border-slate-100 font-bold" placeholder="الاسم الكامل" />
+                  <input type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl text-sm border border-slate-100 font-bold" placeholder="رقم الهاتف" />
+                  <textarea value={address} onChange={e => setAddress(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl text-sm h-24 border border-slate-100 font-bold resize-none" placeholder="العنوان بالتفصيل..." />
                 </div>
-                <button disabled={!address || !customerName || !customerPhone} onClick={handleCheckout} className="w-full py-5 bg-[#25D366] text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-[#25D366]/30">
-                  Send to WhatsApp
+                <button disabled={!address || !customerName || !customerPhone} onClick={handleCheckout} className="w-full py-5 bg-[#25D366] text-white font-black rounded-2xl text-[12px] uppercase tracking-widest shadow-lg shadow-[#25D366]/30">
+                  ارسال الطلب عبر واتساب
                 </button>
               </div>
             </div>
