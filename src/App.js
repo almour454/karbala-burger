@@ -6,13 +6,9 @@ import {
   doc, 
   setDoc, 
   deleteDoc,
-  onSnapshot,
-  initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
+  getDoc,
   getDocs,
-  query,
-  enableIndexedDbPersistence
+  query
 } from "firebase/firestore"; 
 import { 
   getAuth, 
@@ -25,7 +21,7 @@ import {
 const firebaseConfig = JSON.parse(__firebase_config);
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app); // Use standard init first for better compatibility
+const db = getFirestore(app); 
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 const OWNER_PASSWORD = "KarbalaGrill2024"; 
@@ -37,10 +33,8 @@ export default function App() {
   const [dbError, setDbError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
-  const [showRetry, setShowRetry] = useState(false);
-  const pendingIdRef = useRef(null);
 
-  // App State - Immediate Load from Local Storage to bypass "Loading" screens
+  // ⚡ INSTANT RENDER: Load from Local Storage immediately
   const [menuItems, setMenuItems] = useState(() => {
     if (typeof window === 'undefined') return [];
     try {
@@ -70,23 +64,12 @@ export default function App() {
   const [passInput, setPassInput] = useState("");
   const [newItem, setNewItem] = useState({ name: "", price: "", salePrice: "", desc: "", image: "", category: "Burgers" });
 
-  // Persistent Backups
+  // Persistent Backups to LocalStorage
   useEffect(() => {
     localStorage.setItem("karbala_cart", JSON.stringify(cart));
     if (menuItems.length > 0) localStorage.setItem("karbala_menu_backup", JSON.stringify(menuItems));
     localStorage.setItem("karbala_settings_backup", JSON.stringify(settings));
   }, [cart, menuItems, settings]);
-
-  // Fail-safe: If we have cached items, we are "loaded" enough to show the UI
-  useEffect(() => {
-    if (menuItems.length > 0) {
-      setIsDataLoaded(true);
-    }
-    const timer = setTimeout(() => {
-      if (!isDataLoaded) setShowRetry(true);
-    }, 4000);
-    return () => clearTimeout(timer);
-  }, [isDataLoaded]);
 
   // 1. AUTHENTICATION (RULE 3)
   useEffect(() => {
@@ -98,7 +81,6 @@ export default function App() {
           await signInAnonymously(auth);
         }
       } catch (err) {
-        console.error("Auth error:", err);
         setAuthStatus("Offline");
       }
     };
@@ -111,47 +93,43 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. DATA SYNC (RULE 1 & 3)
+  // 2. ONE-TIME DATA FETCH (No more "Bank Robbery" listeners)
   useEffect(() => {
     if (!user) return;
 
-    const menuRef = collection(db, 'artifacts', appId, 'public', 'data', 'menu');
-    const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
+    const fetchData = async () => {
+      try {
+        const menuRef = collection(db, 'artifacts', appId, 'public', 'data', 'menu');
+        const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
 
-    // Snapshot with explicit error handling and metadata tracking
-    const unsubMenu = onSnapshot(menuRef, (snap) => {
-      const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (items.length > 0 || snap.metadata.fromCache === false) {
-        setMenuItems(items);
+        // Fetch Menu
+        const menuSnap = await getDocs(menuRef);
+        const items = menuSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (items.length > 0) setMenuItems(items);
+
+        // Fetch Settings
+        const settingsSnap = await getDoc(settingsRef);
+        if (settingsSnap.exists()) setSettings(prev => ({ ...prev, ...settingsSnap.data() }));
+
         setIsDataLoaded(true);
-        setShowRetry(false);
+        setDbError(null);
+      } catch (err) {
+        console.error("Fetch failed:", err);
+        setDbError("Check Firebase Permissions");
       }
-      setDbError(null);
-    }, (err) => {
-      console.error("Firestore Menu Error:", err);
-      // If we have items from localStorage, don't nag the user with an error bar
-      if (menuItems.length === 0) setDbError("Connecting to Grill...");
-    });
+    };
 
-    const unsubSettings = onSnapshot(settingsRef, (snap) => {
-      if (snap.exists()) setSettings(prev => ({ ...prev, ...snap.data() }));
-    }, (err) => console.error("Settings error:", err));
-
-    return () => { unsubMenu(); unsubSettings(); };
+    fetchData();
   }, [user, appId]);
 
   const safeWrite = async (action) => {
-    if (!user) {
-      setDbError("Waiting for connection...");
-      return;
-    }
+    if (!user) return setDbError("Connecting...");
     setIsSaving(true);
     try {
       await action();
       setIsSaving(false);
     } catch (e) {
-      console.error("Write error:", e);
-      setDbError("Grill is busy. Try again.");
+      setDbError("Permission Denied: Fix Firestore Rules");
       setIsSaving(false);
     }
   };
@@ -159,20 +137,23 @@ export default function App() {
   const addNewItem = () => {
     if (!newItem.name || !newItem.price) return;
     const id = "item_" + Date.now();
+    const tempItem = { ...newItem, id, price: Number(newItem.price), createdAt: new Date().toISOString() };
+    
+    // Update local state so it shows up immediately for the owner
+    setMenuItems(prev => [tempItem, ...prev]);
+
     safeWrite(async () => {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id), {
-        ...newItem,
-        id,
-        price: Number(newItem.price),
-        createdAt: new Date().toISOString()
-      });
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id), tempItem);
       setNewItem({ name: "", price: "", salePrice: "", desc: "", image: "", category: "Burgers" });
     });
   };
 
-  const deleteItem = (id) => safeWrite(async () => {
-    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id));
-  });
+  const deleteItem = (id) => {
+    setMenuItems(prev => prev.filter(i => i.id !== id));
+    safeWrite(async () => {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id));
+    });
+  };
 
   const addToCart = (item) => setCart(p => ({ ...p, [item.id]: (p[item.id] || 0) + 1 }));
   const removeFromCart = (id) => setCart(p => {
@@ -195,7 +176,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#fafafa] text-[#1a1a1a] font-sans">
       {dbError && (
-        <div className="fixed top-0 left-0 w-full bg-orange-600 text-white p-2 text-[10px] font-black uppercase text-center z-[9999] shadow-lg">
+        <div className="fixed top-0 left-0 w-full bg-red-600 text-white p-2 text-[10px] font-black uppercase text-center z-[9999]">
           {dbError}
         </div>
       )}
@@ -215,7 +196,7 @@ export default function App() {
           <div className="min-h-screen flex items-center justify-center bg-[#050505] p-6">
             <div className="w-full max-w-sm text-center">
               <h2 className="text-white text-3xl font-black italic uppercase mb-8 tracking-tighter">Kitchen Access</h2>
-              <input type="password" value={passInput} onChange={e => setPassInput(e.target.value)} className="w-full bg-white/5 border border-white/10 p-6 rounded-3xl text-white text-center mb-4 outline-none focus:border-orange-500 transition-colors" placeholder="••••••••" />
+              <input type="password" value={passInput} onChange={e => setPassInput(e.target.value)} className="w-full bg-white/5 border border-white/10 p-6 rounded-3xl text-white text-center mb-4 outline-none focus:border-orange-500" placeholder="••••••••" />
               <button onClick={() => passInput === OWNER_PASSWORD ? setIsUnlocked(true) : setDbError("Wrong Password")} className="w-full py-6 bg-orange-600 text-white font-black rounded-3xl uppercase text-[10px] tracking-widest">Login</button>
             </div>
           </div>
@@ -240,7 +221,7 @@ export default function App() {
               {menuItems.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).map(item => (
                 <div key={item.id} className="bg-white p-4 rounded-3xl flex items-center justify-between border border-slate-100">
                   <div className="flex items-center gap-4">
-                    <img src={item.image || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=100'} className="w-12 h-12 rounded-xl object-cover" />
+                    <img src={item.image || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=100'} className="w-12 h-12 rounded-xl object-cover" loading="lazy" />
                     <div><p className="font-black uppercase text-xs">{item.name}</p><p className="text-[10px] text-orange-600 font-bold">{Number(item.price).toLocaleString()} IQD</p></div>
                   </div>
                   <button onClick={() => deleteItem(item.id)} className="px-4 py-2 text-red-500 font-black text-[10px] uppercase">Remove</button>
@@ -257,57 +238,41 @@ export default function App() {
           </header>
 
           <main className="max-w-6xl mx-auto px-6">
-            {!isDataLoaded && menuItems.length === 0 ? (
-              <div className="text-center py-20 flex flex-col items-center">
-                <div className="font-black uppercase text-[10px] tracking-widest opacity-20 animate-pulse mb-4">Warming the Grill...</div>
-                {showRetry && (
-                  <button 
-                    onClick={() => window.location.reload()} 
-                    className="px-6 py-3 bg-black text-white rounded-full text-[10px] font-black uppercase tracking-widest animate-in fade-in zoom-in shadow-xl"
-                  >
-                    Force Restart
-                  </button>
-                )}
-              </div>
-            ) : (
-              Object.entries(groupedMenu).length > 0 ? (
-                Object.entries(groupedMenu).map(([cat, items]) => (
-                  <section key={cat} className="mb-20">
-                    <h2 className="text-3xl font-black italic uppercase mb-10 tracking-tight flex items-center gap-4">
-                      {cat} <div className="h-1 flex-1 bg-slate-100 rounded-full"></div>
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                      {items.map(item => (
-                        <div key={item.id} className="bg-white rounded-[3rem] p-4 border border-slate-100 shadow-sm group">
-                          <div className="aspect-square rounded-[2.5rem] overflow-hidden mb-6 bg-slate-50">
-                            <img src={item.image || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=600'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                          </div>
-                          <div className="px-2 pb-2">
-                            <div className="flex justify-between items-start mb-4">
-                              <h3 className="text-xl font-black uppercase italic tracking-tighter">{item.name}</h3>
-                              <p className="font-black text-orange-600">{Number(item.price).toLocaleString()} <span className="text-[8px]">IQD</span></p>
-                            </div>
-                            {cart[item.id] ? (
-                              <div className="flex bg-black text-white rounded-2xl p-1 items-center">
-                                <button onClick={() => removeFromCart(item.id)} className="w-12 h-12 flex items-center justify-center font-black">－</button>
-                                <span className="flex-1 text-center font-black text-[10px]">{cart[item.id]} IN TRAY</span>
-                                <button onClick={() => addToCart(item)} className="w-12 h-12 flex items-center justify-center font-black">＋</button>
-                              </div>
-                            ) : (
-                              <button onClick={() => addToCart(item)} className="w-full py-4 rounded-2xl bg-slate-50 font-black uppercase text-[10px] tracking-widest hover:bg-black hover:text-white transition-all">Add to Tray</button>
-                            )}
-                          </div>
+            {Object.entries(groupedMenu).map(([cat, items]) => (
+              <section key={cat} className="mb-20">
+                <h2 className="text-3xl font-black italic uppercase mb-10 tracking-tight flex items-center gap-4">
+                  {cat} <div className="h-1 flex-1 bg-slate-100 rounded-full"></div>
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {items.map(item => (
+                    <div key={item.id} className="bg-white rounded-[3rem] p-4 border border-slate-100 shadow-sm group">
+                      <div className="aspect-square rounded-[2.5rem] overflow-hidden mb-6 bg-slate-50">
+                        <img 
+                          src={item.image || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=600'} 
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                          loading="lazy"
+                        />
+                      </div>
+                      <div className="px-2 pb-2">
+                        <div className="flex justify-between items-start mb-4">
+                          <h3 className="text-xl font-black uppercase italic tracking-tighter">{item.name}</h3>
+                          <p className="font-black text-orange-600">{Number(item.price).toLocaleString()} <span className="text-[8px]">IQD</span></p>
                         </div>
-                      ))}
+                        {cart[item.id] ? (
+                          <div className="flex bg-black text-white rounded-2xl p-1 items-center">
+                            <button onClick={() => removeFromCart(item.id)} className="w-12 h-12 flex items-center justify-center font-black">－</button>
+                            <span className="flex-1 text-center font-black text-[10px]">{cart[item.id]} IN TRAY</span>
+                            <button onClick={() => addToCart(item)} className="w-12 h-12 flex items-center justify-center font-black">＋</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => addToCart(item)} className="w-full py-4 rounded-2xl bg-slate-50 font-black uppercase text-[10px] tracking-widest hover:bg-black hover:text-white transition-all">Add to Tray</button>
+                        )}
+                      </div>
                     </div>
-                  </section>
-                ))
-              ) : (
-                <div className="text-center py-20">
-                  <p className="font-black uppercase text-[10px] opacity-20">The menu is empty. Check Admin.</p>
+                  ))}
                 </div>
-              )
-            )}
+              </section>
+            ))}
           </main>
           
           {cartTotal > 0 && (
@@ -317,20 +282,6 @@ export default function App() {
                 <div className="flex-1 px-6 text-left font-black italic">{cartTotal.toLocaleString()} IQD</div>
                 <div className="pr-8 font-black text-[10px] uppercase">Checkout →</div>
               </button>
-            </div>
-          )}
-
-          {isCheckoutOpen && (
-            <div className="fixed inset-0 z-[3000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
-              <div className="bg-white w-full max-w-lg rounded-[3rem] p-10 shadow-2xl">
-                <h2 className="text-3xl font-black italic uppercase mb-6">Confirm Order</h2>
-                <textarea className="w-full p-6 bg-slate-50 rounded-2xl h-32 mb-6 outline-none font-bold" placeholder="Delivery Address / Phone..." value={address} onChange={e => setAddress(e.target.value)} />
-                <button onClick={() => {
-                   const msg = `*NEW ORDER*\n\n${Object.entries(cart).map(([id, q]) => `• ${q}x ${menuItems.find(m=>m.id===id)?.name}`).join('\n')}\n\n*Total:* ${cartTotal.toLocaleString()} IQD\n*Address:* ${address}`;
-                   window.open(`https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
-                }} className="w-full py-6 bg-[#25D366] text-white font-black rounded-2xl uppercase text-[10px] tracking-widest">Send WhatsApp</button>
-                <button onClick={() => setIsCheckoutOpen(false)} className="w-full mt-4 text-slate-400 font-black text-[10px] uppercase">Cancel</button>
-              </div>
             </div>
           )}
         </div>
