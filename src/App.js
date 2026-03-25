@@ -60,7 +60,11 @@ export default function App() {
     bgColor: "#ffffff",
     whatsapp: "964780000000",
     openingHours: "12:00 PM - 12:00 AM",
-    locationDesc: "كربلاء - مركز المدينة"
+    locationDesc: "كربلاء - مركز المدينة",
+    facebookUrl: "",
+    instagramUrl: "",
+    tiktokUrl: "",
+    checkoutNote: "يرجى التأكد من الاسم ورقم الهاتف قبل إرسال الطلب."
   });
 
   const [cart, setCart] = useState({});
@@ -252,6 +256,10 @@ export default function App() {
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="واتساب (964...)" value={settings.whatsapp} onChange={e => updateGlobalSettings("whatsapp", e.target.value)} />
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="أوقات العمل" value={settings.openingHours} onChange={e => updateGlobalSettings("openingHours", e.target.value)} />
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2" placeholder="وصف الموقع / العنوان" value={settings.locationDesc} onChange={e => updateGlobalSettings("locationDesc", e.target.value)} />
+                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="Facebook URL" value={settings.facebookUrl || ""} onChange={e => updateGlobalSettings("facebookUrl", e.target.value)} />
+                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="Instagram URL" value={settings.instagramUrl || ""} onChange={e => updateGlobalSettings("instagramUrl", e.target.value)} />
+                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2" placeholder="TikTok URL" value={settings.tiktokUrl || ""} onChange={e => updateGlobalSettings("tiktokUrl", e.target.value)} />
+                <textarea className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2 h-24 resize-none" placeholder="رسالة تظهر عند متابعة الطلب" value={settings.checkoutNote || ""} onChange={e => updateGlobalSettings("checkoutNote", e.target.value)} />
                 <div className="flex items-center gap-4 bg-black/40 p-4 rounded-xl border border-white/5">
                   <span className="text-white text-[10px] font-bold">اللون الأساسي</span>
                   <input type="color" className="w-10 h-10 rounded bg-transparent border-0 cursor-pointer" value={settings.primaryColor} onChange={e => updateGlobalSettings("primaryColor", e.target.value)} />
@@ -372,6 +380,23 @@ export default function App() {
                    <span className="text-[11px] font-black uppercase tracking-widest">{settings.openingHours}</span>
                 </div>
                 <div className="text-[12px] font-black text-slate-900/40 uppercase tracking-tighter" dir="rtl">📍 {settings.locationDesc}</div>
+                <div className="flex items-center gap-2">
+                  {settings.facebookUrl && (
+                    <a href={settings.facebookUrl} target="_blank" rel="noreferrer" aria-label="Facebook" title="Facebook" className="w-10 h-10 rounded-full bg-white border border-black/10 text-[16px] font-black text-slate-700 hover:text-black hover:shadow-md transition-all flex items-center justify-center">
+                      <span aria-hidden="true">f</span>
+                    </a>
+                  )}
+                  {settings.instagramUrl && (
+                    <a href={settings.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram" title="Instagram" className="w-10 h-10 rounded-full bg-white border border-black/10 text-[15px] font-black text-slate-700 hover:text-black hover:shadow-md transition-all flex items-center justify-center">
+                      <span aria-hidden="true">◎</span>
+                    </a>
+                  )}
+                  {settings.tiktokUrl && (
+                    <a href={settings.tiktokUrl} target="_blank" rel="noreferrer" aria-label="TikTok" title="TikTok" className="w-10 h-10 rounded-full bg-white border border-black/10 text-[13px] font-black text-slate-700 hover:text-black hover:shadow-md transition-all flex items-center justify-center">
+                      <span aria-hidden="true">♫</span>
+                    </a>
+                  )}
+                </div>
              </div>
           </header>
 
@@ -383,19 +408,19 @@ export default function App() {
                 </div>
                 <div className="flex gap-6 px-6 overflow-x-auto no-scrollbar pb-8 snap-x">
                   {discountItems.map(item => (
-                    <div key={item.id} className="snap-center shrink-0 w-[85vw] md:w-80 rounded-[3rem] p-7 text-white relative overflow-hidden shadow-2xl" style={{ backgroundColor: settings.primaryColor }}>
+                    <div key={item.id} className="snap-center shrink-0 w-[74vw] max-w-[300px] md:w-72 rounded-[2.2rem] p-5 text-white relative overflow-hidden shadow-xl border border-white/20" style={{ backgroundColor: settings.primaryColor }}>
                       <div className="relative z-10">
-                        <div className="mb-6"><span className="bg-white/20 backdrop-blur-md text-[9px] font-black px-4 py-1.5 rounded-full">OFFER</span></div>
-                        <h3 className="text-2xl font-black uppercase leading-none mb-8 tracking-tighter text-right">{item.name}</h3>
+                        <div className="mb-4"><span className="bg-white/20 backdrop-blur-md text-[8px] font-black px-3 py-1 rounded-full">OFFER</span></div>
+                        <h3 className="text-xl font-black uppercase leading-tight mb-6 tracking-tight text-right">{item.name}</h3>
                         <div className="flex justify-between items-end">
-                           <button onClick={() => addToCart(item)} className="bg-white w-12 h-12 rounded-full flex items-center justify-center font-black shadow-2xl text-xl text-black">＋</button>
+                           <button onClick={() => addToCart(item)} className="bg-white w-10 h-10 rounded-full flex items-center justify-center font-black shadow-lg text-lg text-black">＋</button>
                            <div className="text-right">
-                             <p className="text-xs font-black opacity-60 line-through mb-1">{item.price} د.ع</p>
-                             <p className="text-2xl font-black tracking-tighter">{item.salePrice} <span className="text-xs">د.ع</span></p>
+                             <p className="text-sm font-black opacity-75 line-through mb-1">{Number(item.price || 0).toLocaleString()} د.ع</p>
+                             <p className="text-3xl font-black tracking-tight leading-none">{Number(item.salePrice || 0).toLocaleString()} <span className="text-sm">د.ع</span></p>
                           </div>
                         </div>
                       </div>
-                      <img src={item.image} className="absolute -top-10 -left-10 w-40 h-40 object-cover opacity-20 -rotate-12 rounded-[4rem]" onError={(e) => e.target.src = PLACEHOLDER} />
+                      <img src={item.image} className="absolute -top-8 -left-8 w-32 h-32 object-cover opacity-20 -rotate-12 rounded-[3rem]" onError={(e) => e.target.src = PLACEHOLDER} />
                     </div>
                   ))}
                 </div>
@@ -481,6 +506,11 @@ export default function App() {
                   <input type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="w-full p-5 bg-slate-50 rounded-2xl text-sm border-2 border-slate-100 font-bold text-right outline-none focus:border-orange-500" placeholder="رقم الهاتف" />
                   <textarea value={address} onChange={e => setAddress(e.target.value)} className="w-full p-5 bg-slate-50 rounded-2xl text-sm h-24 border-2 border-slate-100 font-bold text-right outline-none focus:border-orange-500 resize-none" placeholder="العنوان بالتفصيل" />
                 </div>
+                {settings.checkoutNote && (
+                  <div className="mb-5 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-right">
+                    <p className="text-xs font-black text-amber-900">{settings.checkoutNote}</p>
+                  </div>
+                )}
                 <button disabled={!address || !customerName || !customerPhone} onClick={sendWhatsApp} className="w-full py-6 bg-[#25D366] text-white font-black rounded-2xl text-sm shadow-xl disabled:opacity-30 disabled:grayscale transition-all">إرسال عبر واتساب ✅</button>
               </div>
             </div>
