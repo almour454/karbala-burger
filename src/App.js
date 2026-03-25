@@ -99,7 +99,7 @@ export default function App() {
   const navigateTo = (newView) => {
     window.location.hash = newView === "owner" ? "admin" : "";
     setView(newView);
-    window.scrollTo(0, 0); // Reset scroll on view change
+    window.scrollTo(0, 0); 
   };
 
   useEffect(() => {
@@ -202,7 +202,7 @@ export default function App() {
   return (
     <div className="min-h-screen font-sans selection:bg-orange-100 antialiased" style={{ backgroundColor: settings.bgColor }}>
       
-      {/* 🛠 TOP NAV (NON-STICKY) */}
+      {/* 🛠 TOP NAV */}
       <div className="flex justify-center p-6 pb-2">
         <div className="flex bg-black p-1 rounded-full border border-white/10 shadow-xl">
           <button 
@@ -285,9 +285,12 @@ export default function App() {
               </section>
 
               <section className="bg-slate-900 p-8 rounded-[2.5rem] border border-white/10 shadow-2xl">
-                <h3 className="text-[10px] font-black uppercase opacity-40 mb-6 tracking-[0.2em] text-right">إضافة وجبة جديدة</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <h3 className="text-[10px] font-black uppercase opacity-40 mb-6 tracking-[0.2em] text-right">إدارة الوجبات / Manage Items</h3>
+                
+                {/* Add New Item Form */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10 pb-10 border-b border-white/5">
                   <input className="md:col-span-2 bg-black/40 border border-white/10 p-5 rounded-2xl text-lg font-black text-right" placeholder="اسم الوجبة" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                  <textarea className="md:col-span-2 bg-black/40 border border-white/10 p-5 rounded-2xl text-sm font-bold text-right h-24 resize-none" placeholder="وصف الوجبة (اختياري)" value={newItem.desc} onChange={e => setNewItem({...newItem, desc: e.target.value})} />
                   <div className="grid grid-cols-2 gap-3">
                     <input className="bg-orange-500/10 border border-orange-500/30 p-5 rounded-2xl text-sm font-black text-orange-400 placeholder:text-orange-900" placeholder="سعر العرض" value={newItem.salePrice} onChange={e => setNewItem({...newItem, salePrice: e.target.value})} />
                     <input className="bg-black/40 border border-white/10 p-5 rounded-2xl text-sm font-black text-right" placeholder="السعر" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
@@ -297,6 +300,22 @@ export default function App() {
                   </select>
                   <input className="md:col-span-2 bg-black/40 border border-white/10 p-5 rounded-2xl text-sm font-bold text-right" placeholder="رابط صورة الوجبة" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
                   <button onClick={addNewItem} className="md:col-span-2 py-6 rounded-2xl font-black uppercase text-[14px] tracking-[0.3em] shadow-2xl transition-transform active:scale-95" style={{ backgroundColor: settings.primaryColor }}>حفظ الوجبة</button>
+                </div>
+
+                {/* List Current Items to Delete */}
+                <div className="space-y-4">
+                  <h4 className="text-[9px] font-black uppercase opacity-30 text-right">قائمة الوجبات الحالية (للحذف)</h4>
+                  <div className="grid grid-cols-1 gap-2">
+                    {menuItems.map(item => (
+                      <div key={item.id} className="bg-black/30 p-4 rounded-2xl flex items-center justify-between border border-white/5">
+                        <button onClick={() => deleteItem(item.id)} className="bg-red-500/10 text-red-500 p-2 px-4 rounded-xl text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition-all">حذف</button>
+                        <div className="text-right">
+                          <p className="font-black text-sm">{item.name}</p>
+                          <p className="text-[10px] opacity-40">{item.category} • {item.price.toLocaleString()} د.ع</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </section>
             </div>
@@ -322,7 +341,7 @@ export default function App() {
              </div>
           </header>
 
-          {/* 🔥 DEALS (STATIC SECTION) */}
+          {/* 🔥 DEALS */}
           {discountItems.length > 0 && (
             <section className="py-6">
               <div className="max-w-6xl mx-auto">
@@ -355,7 +374,7 @@ export default function App() {
             </section>
           )}
 
-          {/* 🍔 CATEGORY MENU (NOW STATIC - NO STICKY) */}
+          {/* 🍔 CATEGORY MENU */}
           <div className="py-8 bg-transparent">
             <div className="max-w-6xl mx-auto flex gap-3 px-6 overflow-x-auto no-scrollbar justify-start md:justify-center" dir="rtl">
               <button 
@@ -379,57 +398,63 @@ export default function App() {
 
           {/* GRID */}
           <main className="max-w-6xl mx-auto px-6 py-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8" dir="rtl">
-            {filteredItems.map(item => (
-              <div key={item.id} className="bg-white rounded-[3rem] p-5 flex flex-col border-2 border-black/5 shadow-xl hover:shadow-2xl transition-all relative">
-                <div className="w-full aspect-square rounded-[2.5rem] overflow-hidden bg-slate-100 relative mb-5">
-                  <img src={item.image} className="w-full h-full object-cover" alt={item.name} />
-                  {item.salePrice && (
-                    <div className="absolute top-4 left-4 bg-red-600 text-white px-4 py-2 rounded-2xl font-black text-[10px] uppercase shadow-xl animate-pulse">
-                      عرض
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex-1 flex flex-col justify-between">
-                  <div className="mb-4">
-                    <h3 className="text-xl font-black text-slate-950 leading-tight mb-1">{item.name}</h3>
-                    <p className="text-[11px] text-slate-400 font-bold" dir="ltr">{item.desc || "Al Karbala Special"}</p>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <div className="text-right">
-                      {item.salePrice ? (
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-slate-400 line-through mb-0.5">{item.price.toLocaleString()} د.ع</span>
-                          <p className="font-black text-xl tracking-tighter" style={{ color: settings.primaryColor }}>
-                            {item.salePrice.toLocaleString()} <span className="text-[10px]">د.ع</span>
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="font-black text-xl tracking-tighter" style={{ color: settings.primaryColor }}>
-                          {item.price.toLocaleString()} <span className="text-[10px]">د.ع</span>
-                        </p>
-                      )}
-                    </div>
-                    
-                    {cart[item.id] ? (
-                      <div className="flex items-center bg-black text-white rounded-2xl p-1 shadow-lg">
-                        <button onClick={() => removeFromCart(item.id)} className="w-9 h-9 font-black hover:bg-white/10 rounded-xl text-xl">－</button>
-                        <span className="w-7 text-center font-black text-sm">{cart[item.id]}</span>
-                        <button onClick={() => addToCart(item)} className="w-9 h-9 font-black hover:bg-white/10 rounded-xl text-xl">＋</button>
+            {filteredItems.length === 0 ? (
+              <div className="col-span-full py-20 text-center opacity-20">
+                <p className="text-4xl font-black italic uppercase">قريباً / Coming Soon</p>
+              </div>
+            ) : (
+              filteredItems.map(item => (
+                <div key={item.id} className="bg-white rounded-[3rem] p-5 flex flex-col border-2 border-black/5 shadow-xl hover:shadow-2xl transition-all relative">
+                  <div className="w-full aspect-square rounded-[2.5rem] overflow-hidden bg-slate-100 relative mb-5">
+                    <img src={item.image} className="w-full h-full object-cover" alt={item.name} />
+                    {item.salePrice && (
+                      <div className="absolute top-4 left-4 bg-red-600 text-white px-4 py-2 rounded-2xl font-black text-[10px] uppercase shadow-xl animate-pulse">
+                        عرض
                       </div>
-                    ) : (
-                      <button onClick={() => addToCart(item)} className="px-7 py-3.5 bg-slate-950 text-white rounded-2xl font-black text-[12px] uppercase shadow-lg active:scale-95 transition-transform">
-                        إضافة +
-                      </button>
                     )}
                   </div>
+                  
+                  <div className="flex-1 flex flex-col justify-between">
+                    <div className="mb-4">
+                      <h3 className="text-xl font-black text-slate-950 leading-tight mb-1">{item.name}</h3>
+                      <p className="text-[11px] text-slate-400 font-bold leading-tight" dir="rtl">{item.desc || "ألذ وجبة في كربلاء"}</p>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <div className="text-right">
+                        {item.salePrice ? (
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-slate-400 line-through mb-0.5">{item.price.toLocaleString()} د.ع</span>
+                            <p className="font-black text-xl tracking-tighter" style={{ color: settings.primaryColor }}>
+                              {item.salePrice.toLocaleString()} <span className="text-[10px]">د.ع</span>
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="font-black text-xl tracking-tighter" style={{ color: settings.primaryColor }}>
+                            {item.price.toLocaleString()} <span className="text-[10px]">د.ع</span>
+                          </p>
+                        )}
+                      </div>
+                      
+                      {cart[item.id] ? (
+                        <div className="flex items-center bg-black text-white rounded-2xl p-1 shadow-lg">
+                          <button onClick={() => removeFromCart(item.id)} className="w-9 h-9 font-black hover:bg-white/10 rounded-xl text-xl">－</button>
+                          <span className="w-7 text-center font-black text-sm">{cart[item.id]}</span>
+                          <button onClick={() => addToCart(item)} className="w-9 h-9 font-black hover:bg-white/10 rounded-xl text-xl">＋</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => addToCart(item)} className="px-7 py-3.5 bg-slate-950 text-white rounded-2xl font-black text-[12px] uppercase shadow-lg active:scale-95 transition-transform">
+                          إضافة +
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </main>
 
-          {/* FLOATING CART (ONLY STICKY ELEMENT) */}
+          {/* FLOATING CART */}
           {cartTotal > 0 && (
             <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-sm px-6">
               <button 
@@ -453,7 +478,7 @@ export default function App() {
           {/* CHECKOUT MODAL */}
           {isCheckoutOpen && (
             <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md p-4">
-              <div className="bg-white w-full max-w-xl rounded-[4rem] p-10 shadow-2xl" dir="rtl">
+              <div className="bg-white w-full max-w-xl rounded-[4rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh]" dir="rtl">
                 <div className="flex justify-between items-center mb-10">
                   <h2 className="text-4xl font-black italic">إتمام الطلب 📝</h2>
                   <button onClick={() => setIsCheckoutOpen(false)} className="w-14 h-14 bg-slate-100 rounded-full font-black text-3xl flex items-center justify-center transition-colors">×</button>
