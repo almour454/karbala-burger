@@ -114,7 +114,7 @@ export default function App() {
       }
     };
     initAuth();
-    const unsubscribeAuth = onAuthStateChanged(auth, (u) => { if (u) setUser(u); });
+    const unsubscribeAuth = onAuthStateChanged(auth, (u) => setUser(u));
     return () => unsubscribeAuth();
   }, []);
 
@@ -181,10 +181,15 @@ export default function App() {
   };
 
   const handleOwnerLogout = async () => {
-    await signOut(auth);
-    await signInAnonymously(auth);
     setIsUnlocked(false);
     setOwnerPassword("");
+    try {
+      await signOut(auth);
+      await signInAnonymously(auth);
+    } catch (e) {
+      console.error(e);
+    }
+    navigateTo("customer");
   };
 
   const updateGlobalSettings = async (field, value) => {
@@ -299,7 +304,7 @@ export default function App() {
         ) : (
           <div className="max-w-4xl mx-auto p-6 pb-40 space-y-8" dir="rtl">
             <div className="flex justify-end">
-              <button onClick={handleOwnerLogout} className="bg-black text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider">تسجيل خروج</button>
+              <button type="button" onClick={handleOwnerLogout} className="bg-black text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-white hover:text-black border border-white/20 transition-colors">تسجيل خروج</button>
             </div>
             
             {/* BRANDING */}
@@ -466,28 +471,37 @@ export default function App() {
 
           {/* DEALS */}
           {discountItems.length > 0 && (
-            <section className="py-6 overflow-hidden">
-                <div className="px-6 flex items-center justify-center mb-6" dir="rtl">
-                   <h2 className="text-[20px] font-black uppercase italic" style={{ color: settings.primaryColor }}>عروض نارية 🔥</h2>
+            <section className="py-6 overflow-hidden deals-strip relative">
+                <div className="deals-strip-bg pointer-events-none absolute inset-0 opacity-40" style={{ background: `linear-gradient(90deg, transparent, ${settings.primaryColor}33, transparent)` }} />
+                <div className="px-6 flex items-center justify-center mb-6 relative z-10" dir="rtl">
+                   <h2 className="deals-title-glow text-[22px] font-black uppercase italic inline-block" style={{ color: settings.primaryColor }}>عروض نارية <span className="deals-fire inline-block">🔥</span></h2>
                 </div>
-                <div className="flex gap-4 px-6 overflow-x-auto no-scrollbar pb-8 snap-x">
-                  {discountItems.map(item => (
-                    <div key={item.id} className="snap-center shrink-0 w-[68vw] max-w-[260px] md:w-64 rounded-[1.8rem] p-4 text-white relative overflow-hidden shadow-xl border border-white/30" style={{ background: `linear-gradient(160deg, ${settings.primaryColor} 0%, #7c2d12 130%)` }}>
+                <div className="flex gap-4 px-6 overflow-x-auto no-scrollbar pb-8 snap-x relative z-10">
+                  {discountItems.map((item, di) => (
+                    <div
+                      key={item.id}
+                      className="deal-card-hot snap-center shrink-0 w-[68vw] max-w-[260px] md:w-64 rounded-[1.8rem] p-4 text-white relative overflow-hidden shadow-xl border border-white/30"
+                      style={{
+                        background: `linear-gradient(160deg, ${settings.primaryColor} 0%, #7c2d12 130%)`,
+                        animationDelay: `${di * 0.15}s`
+                      }}
+                    >
+                      <div className="deal-shimmer" aria-hidden="true" />
                       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_45%)]" />
-                      <div className="absolute -bottom-8 -right-8 w-24 h-24 rounded-full bg-white/10 blur-2xl" />
+                      <div className="absolute -bottom-8 -right-8 w-24 h-24 rounded-full bg-white/10 blur-2xl deal-glow-orb" />
                       <div className="absolute top-2 left-2 w-14 h-14 rounded-full border border-white/15" />
                       <div className="relative z-10">
                         <div className="mb-3 flex items-center justify-between">
-                          <span className="bg-white/20 backdrop-blur-md text-[8px] font-black px-2.5 py-1 rounded-full">HOT DEAL</span>
+                          <span className="deal-badge-pulse bg-white/20 backdrop-blur-md text-[8px] font-black px-2.5 py-1 rounded-full">HOT DEAL</span>
                           <span className="bg-black/30 text-[9px] font-black px-2 py-1 rounded-full">
                             -{Math.round(((Number(item.price || 0) - Number(item.salePrice || 0)) / Number(item.price || 1)) * 100)}%
                           </span>
                         </div>
                         <h3 className="text-lg font-black uppercase leading-tight mb-5 tracking-tight text-right">{item.name}</h3>
                         <div className="flex justify-between items-end">
-                           <button onClick={() => addToCart(item)} className="bg-white w-9 h-9 rounded-full flex items-center justify-center font-black shadow-lg text-base text-black hover:scale-105 transition-transform">＋</button>
+                           <button type="button" onClick={() => addToCart(item)} className="bg-white w-9 h-9 rounded-full flex items-center justify-center font-black shadow-lg text-base text-black hover:scale-110 active:scale-95 transition-transform deal-add-btn">＋</button>
                            <div className="text-right">
-                             <p className="text-[12px] font-black mb-1 text-amber-200">
+                             <p className="text-lg sm:text-xl font-black mb-1 text-amber-200 leading-tight">
                                <span className="old-price-fancy old-price-hot">{Number(item.price || 0).toLocaleString()}</span>
                                <span className="mr-1 text-amber-100">د.ع</span>
                              </p>
@@ -495,7 +509,7 @@ export default function App() {
                           </div>
                         </div>
                       </div>
-                      <img src={item.image} alt="" className="absolute -top-10 -left-10 w-40 h-40 object-cover opacity-[0.18] -rotate-12 rounded-[2.4rem] saturate-75 contrast-110" onError={(e) => e.target.src = PLACEHOLDER} />
+                      <img src={item.image} alt="" className="absolute -top-10 -left-10 w-40 h-40 object-cover opacity-[0.18] -rotate-12 rounded-[2.4rem] saturate-75 contrast-110 deal-bg-img" onError={(e) => e.target.src = PLACEHOLDER} />
                     </div>
                   ))}
                 </div>
@@ -611,6 +625,67 @@ export default function App() {
         .old-price-hot {
           text-decoration-color: rgba(239, 68, 68, 0.95);
         }
+        .old-price-fancy.old-price-hot {
+          text-decoration-thickness: 3px;
+        }
+        @keyframes dealsTitleGlow {
+          0%, 100% { filter: drop-shadow(0 0 0 transparent); transform: scale(1); }
+          50% { filter: drop-shadow(0 0 14px rgba(234, 88, 12, 0.55)); transform: scale(1.02); }
+        }
+        .deals-title-glow { animation: dealsTitleGlow 2.8s ease-in-out infinite; }
+        @keyframes dealsFireWiggle {
+          0%, 100% { transform: rotate(-4deg) scale(1); }
+          50% { transform: rotate(4deg) scale(1.08); }
+        }
+        .deals-fire { animation: dealsFireWiggle 1.2s ease-in-out infinite; }
+        @keyframes dealShimmerMove {
+          0% { transform: translateX(-120%) skewX(-18deg); opacity: 0; }
+          15% { opacity: 1; }
+          100% { transform: translateX(220%) skewX(-18deg); opacity: 0; }
+        }
+        .deal-shimmer {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          pointer-events: none;
+          z-index: 5;
+        }
+        .deal-shimmer::after {
+          content: '';
+          position: absolute;
+          top: -50%;
+          left: 0;
+          width: 45%;
+          height: 200%;
+          background: linear-gradient(105deg, transparent, rgba(255,255,255,0.22), transparent);
+          animation: dealShimmerMove 3.2s ease-in-out infinite;
+        }
+        @keyframes dealCardFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-5px); }
+        }
+        @keyframes dealBorderPulse {
+          0%, 100% { border-color: rgba(255,255,255,0.28); box-shadow: 0 12px 40px rgba(0,0,0,0.18); }
+          50% { border-color: rgba(255,255,255,0.55); box-shadow: 0 18px 50px rgba(255, 120, 60, 0.22); }
+        }
+        .deal-card-hot {
+          animation: dealCardFloat 3.5s ease-in-out infinite, dealBorderPulse 3s ease-in-out infinite;
+        }
+        @keyframes dealOrbPulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.75; transform: scale(1.08); }
+        }
+        .deal-glow-orb { animation: dealOrbPulse 4s ease-in-out infinite; }
+        @keyframes dealBadgePulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.35); }
+          50% { box-shadow: 0 0 0 6px rgba(255,255,255,0); }
+        }
+        .deal-badge-pulse { animation: dealBadgePulse 2s ease-in-out infinite; }
+        @keyframes dealBgDrift {
+          0%, 100% { transform: rotate(-12deg) translate(0, 0); }
+          50% { transform: rotate(-10deg) translate(4px, -3px); }
+        }
+        .deal-bg-img { animation: dealBgDrift 8s ease-in-out infinite; }
       `}} />
     </div>
   );
