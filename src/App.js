@@ -52,7 +52,9 @@ export default function App() {
   const [menuItems, setMenuItems] = useState([]);
   const [categories, setCategories] = useState(["Burgers", "Drinks", "Mandi"]);
   const [cart, setCart] = useState({});
-  const [loading, setLoading] = useState(true);
+  // SPEED FIX: loading starts as false so UI renders immediately. 
+  // We use dataLoaded to show a small spinner only inside the menu area.
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [address, setAddress] = useState("");
   
@@ -64,7 +66,7 @@ export default function App() {
   const [settings, setSettings] = useState({
     restaurantName: "AL KARBALA BURGER",
     tagline: "Best Grill in the City",
-    primaryColor: "#ea580c", // Default Orange-600
+    primaryColor: "#ea580c", 
     whatsapp: "964780000000",
     openingHours: "12:00 PM - 12:00 AM",
     locationDesc: "Karbala, City Center"
@@ -121,12 +123,14 @@ export default function App() {
     initAuth();
     onAuthStateChanged(auth, (u) => u && setUser(u));
 
+    // Listen to Menu
     const unsubMenu = onSnapshot(getMenuRef(), (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setMenuItems(data);
-      setLoading(false); 
-    }, (error) => setLoading(false));
+      setDataLoaded(true); 
+    }, (error) => setDataLoaded(true));
 
+    // Listen to Settings
     const unsubSettings = onSnapshot(getSettingsRef(), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
@@ -208,17 +212,8 @@ export default function App() {
     window.open(waUrl);
   };
 
-  if (loading && menuItems.length === 0) return (
-    <div className="min-h-screen flex items-center justify-center bg-white text-slate-900 font-black italic">
-      <div className="text-center animate-pulse">
-        <div className="text-5xl mb-4">🍔</div>
-        <p className="uppercase tracking-[0.4em] text-[10px] text-orange-600 font-black">Pre-heating the Grill...</p>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="min-h-screen bg-slate-50 font-sans selection:bg-orange-100 antialiased">
+    <div className="min-h-screen bg-slate-50 font-sans selection:bg-orange-100 antialiased transition-opacity duration-700">
       
       {/* 🛠 TOP NAV */}
       <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[1000] flex bg-black/95 backdrop-blur-2xl p-2 rounded-full border border-white/10 shadow-2xl scale-90 md:scale-100">
@@ -398,37 +393,50 @@ export default function App() {
           )}
 
           {/* Menu Sections */}
-          <main className="max-w-7xl mx-auto px-6 py-20 space-y-32">
-            {Object.entries(groupedMenu).map(([category, items]) => (
-              <section key={String(category)}>
-                <h2 className="text-4xl font-black italic uppercase mb-12 tracking-tighter">{String(category)}</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                  {items.map(item => (
-                    <div key={item.id} className="bg-white rounded-[4rem] overflow-hidden border border-slate-100 shadow-sm flex flex-col group transition-transform hover:-translate-y-2">
-                      <div className="h-64 overflow-hidden relative bg-slate-100">
-                        <img src={item.image} className="w-full h-full object-cover" alt="" loading="lazy" />
-                        <div className="absolute top-6 right-6 bg-white px-4 py-2 rounded-2xl font-black text-lg shadow-lg">
-                           {(item.salePrice || item.price).toLocaleString()} <small className="text-[10px]">IQD</small>
+          <main className="max-w-7xl mx-auto px-6 py-20 space-y-32 min-h-[40vh]">
+            {!dataLoaded ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <div className="w-12 h-12 border-4 border-slate-200 border-t-orange-600 rounded-full animate-spin mb-6"></div>
+                <p className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-400">Syncing Menu...</p>
+              </div>
+            ) : menuItems.length === 0 ? (
+              <div className="text-center py-32 opacity-20">
+                <span className="text-6xl mb-6 block">🍽️</span>
+                <h3 className="text-xl font-black uppercase italic">Menu is being prepared</h3>
+                <p className="text-[10px] font-bold uppercase tracking-widest mt-2">Check back in a moment</p>
+              </div>
+            ) : (
+              Object.entries(groupedMenu).map(([category, items]) => (
+                <section key={String(category)}>
+                  <h2 className="text-4xl font-black italic uppercase mb-12 tracking-tighter">{String(category)}</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+                    {items.map(item => (
+                      <div key={item.id} className="bg-white rounded-[4rem] overflow-hidden border border-slate-100 shadow-sm flex flex-col group transition-transform hover:-translate-y-2">
+                        <div className="h-64 overflow-hidden relative bg-slate-100">
+                          <img src={item.image || 'https://via.placeholder.com/600x400?text=Karbala+Burger'} className="w-full h-full object-cover" alt="" loading="lazy" />
+                          <div className="absolute top-6 right-6 bg-white px-4 py-2 rounded-2xl font-black text-lg shadow-lg">
+                             {(item.salePrice || item.price).toLocaleString()} <small className="text-[10px]">IQD</small>
+                          </div>
+                        </div>
+                        <div className="p-10 flex-1 flex flex-col">
+                          <h3 className="text-2xl font-black uppercase mb-3 italic">{item.name}</h3>
+                          <p className="text-slate-400 text-xs mb-8 flex-1">{item.desc || "The finest taste in the city."}</p>
+                          {cart[item.id] ? (
+                              <div className="flex items-center bg-slate-950 text-white rounded-3xl p-1 shadow-xl">
+                                  <button onClick={() => removeFromCart(item.id)} className="flex-1 py-4 font-black">－</button>
+                                  <span className="flex-1 text-center font-black">{cart[item.id]}</span>
+                                  <button onClick={() => addToCart(item)} className="flex-1 py-4 font-black">＋</button>
+                              </div>
+                          ) : (
+                              <button onClick={() => addToCart(item)} className="w-full py-5 bg-slate-50 text-slate-900 border border-slate-100 rounded-3xl font-black uppercase text-[10px] tracking-widest hover:text-white transition-all hover:border-transparent" style={{ "--hover-bg": settings.primaryColor }} onMouseEnter={e => e.target.style.backgroundColor = settings.primaryColor} onMouseLeave={e => e.target.style.backgroundColor = ""}>Add to Tray</button>
+                          )}
                         </div>
                       </div>
-                      <div className="p-10 flex-1 flex flex-col">
-                        <h3 className="text-2xl font-black uppercase mb-3 italic">{item.name}</h3>
-                        <p className="text-slate-400 text-xs mb-8 flex-1">{item.desc}</p>
-                        {cart[item.id] ? (
-                            <div className="flex items-center bg-slate-950 text-white rounded-3xl p-1 shadow-xl">
-                                <button onClick={() => removeFromCart(item.id)} className="flex-1 py-4 font-black">－</button>
-                                <span className="flex-1 text-center font-black">{cart[item.id]}</span>
-                                <button onClick={() => addToCart(item)} className="flex-1 py-4 font-black">＋</button>
-                            </div>
-                        ) : (
-                            <button onClick={() => addToCart(item)} className="w-full py-5 bg-slate-50 text-slate-900 border border-slate-100 rounded-3xl font-black uppercase text-[10px] tracking-widest hover:text-white transition-all hover:border-transparent" style={{ "--hover-bg": settings.primaryColor }} onMouseEnter={e => e.target.style.backgroundColor = settings.primaryColor} onMouseLeave={e => e.target.style.backgroundColor = ""}>Add to Tray</button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
+                    ))}
+                  </div>
+                </section>
+              ))
+            )}
           </main>
 
           {/* Floating Total */}
