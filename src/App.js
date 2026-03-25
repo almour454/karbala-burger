@@ -19,7 +19,8 @@ import {
 } from "firebase/auth";
 
 /**
- * 🛠️ CONFIGURATION - BACK TO STANDARD POWER
+ * 🛠️ CONFIGURATION
+ * If it works here but not on your site, ensure these match your Firebase Console exactly.
  */
 const localConfig = {
   apiKey: "AIzaSyBi9O20ep4sQEfAQSvQAexHzzT1wjj8cHc",
@@ -51,6 +52,7 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [dbError, setDbError] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
 
   // 🚀 STATE
   const [menuItems, setMenuItems] = useState([]);
@@ -82,42 +84,59 @@ export default function App() {
 
   // 🔥 REAL-TIME DATA SYNC
   useEffect(() => {
-    const init = async () => {
-      const token = typeof window !== 'undefined' ? window.__initial_auth_token : null;
-      if (token) await signInWithCustomToken(auth, token);
-      else await signInAnonymously(auth);
+    const initAuth = async () => {
+      try {
+        const token = typeof window !== 'undefined' ? window.__initial_auth_token : null;
+        if (token) {
+          await signInWithCustomToken(auth, token);
+        } else {
+          // This is what happens on your live site
+          await signInAnonymously(auth);
+        }
+      } catch (err) {
+        setDbError("Auth Failed: " + err.message + ". Check if Anonymous Auth is enabled in Firebase Console.");
+      } finally {
+        setAuthLoading(false);
+      }
     };
-    init();
+    initAuth();
 
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      if (u) {
-        // Sync Menu
-        const menuRef = collection(db, 'artifacts', appId, 'public', 'data', 'menu');
-        const unsubMenu = onSnapshot(menuRef, (snap) => {
-          setMenuItems(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        }, (err) => setDbError("Menu Sync Failed: " + err.message));
-
-        // Sync Settings
-        const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
-        const unsubSettings = onSnapshot(settingsRef, (snap) => {
-          if (snap.exists()) {
-            const data = snap.data();
-            setSettings(prev => ({ ...prev, ...data }));
-            if (data.categories) setCategories(data.categories);
-          }
-        }, (err) => setDbError("Settings Sync Failed: " + err.message));
-
-        return () => { unsubMenu(); unsubSettings(); };
-      }
     });
 
     return () => unsubscribeAuth();
   }, []);
 
+  // Data Fetching depends on User existence (Rule 3)
+  useEffect(() => {
+    if (!user) return;
+
+    // Sync Menu
+    const menuRef = collection(db, 'artifacts', appId, 'public', 'data', 'menu');
+    const unsubMenu = onSnapshot(menuRef, (snap) => {
+      setMenuItems(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => setDbError("Menu Sync Failed: " + err.message));
+
+    // Sync Settings
+    const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
+    const unsubSettings = onSnapshot(settingsRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setSettings(prev => ({ ...prev, ...data }));
+        if (data.categories) setCategories(data.categories);
+      }
+    }, (err) => setDbError("Settings Sync Failed: " + err.message));
+
+    return () => { unsubMenu(); unsubSettings(); };
+  }, [user]);
+
   // 🛠️ OWNER ACTIONS - FORCED SYNC
   const performAction = async (actionFn) => {
-    if (!user) return;
+    if (!user) {
+      setDbError("You must be logged in to perform this action.");
+      return;
+    }
     setIsSaving(true);
     setDbError(null);
     setSaveSuccess(false);
@@ -126,7 +145,7 @@ export default function App() {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (e) {
-      setDbError(e.message);
+      setDbError("Save Failed: " + e.message + ". Check Firestore Security Rules.");
       console.error(e);
     } finally {
       setIsSaving(false);
@@ -203,12 +222,23 @@ export default function App() {
     setIsCheckoutOpen(false);
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-slate-100 border-t-orange-500 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Warming up the grill...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans antialiased text-slate-900">
       {/* 🚨 ERROR TOAST */}
       {dbError && (
-        <div className="fixed bottom-4 right-4 z-[3000] bg-red-600 text-white p-4 rounded-2xl shadow-2xl max-w-xs animate-bounce">
-          <p className="text-[10px] font-black uppercase mb-1">Database Error</p>
+        <div className="fixed bottom-4 right-4 z-[3000] bg-red-600 text-white p-4 rounded-2xl shadow-2xl max-w-xs">
+          <p className="text-[10px] font-black uppercase mb-1">Alert</p>
           <p className="text-xs font-bold leading-tight">{dbError}</p>
           <button onClick={() => setDbError(null)} className="mt-2 text-[10px] underline font-black">Dismiss</button>
         </div>
@@ -251,8 +281,9 @@ export default function App() {
             <div className="flex justify-between items-end mb-12">
               <h1 className="text-6xl font-black italic uppercase tracking-tighter" style={{ color: settings.primaryColor }}>Owner HQ</h1>
               <div className="text-right">
-                <p className="text-[10px] font-black text-slate-500 uppercase">Status</p>
-                <p className="text-xs font-bold text-green-500 uppercase flex items-center gap-2">● Live Connected</p>
+                <p className="text-[10px] font-black text-slate-500 uppercase">System ID</p>
+                <p className="text-[10px] font-mono text-slate-400 break-all max-w-[150px] leading-tight">{user?.uid || 'Not Authenticated'}</p>
+                <p className="text-xs font-bold text-green-500 uppercase flex items-center gap-2 mt-1">● Live Connected</p>
               </div>
             </div>
             
