@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { initializeApp } from "firebase/app";
 import { 
   getFirestore, 
@@ -6,8 +6,7 @@ import {
   doc, 
   setDoc, 
   deleteDoc,
-  onSnapshot,
-  enableIndexedDbPersistence
+  onSnapshot
 } from "firebase/firestore"; 
 import { 
   getAuth, 
@@ -44,6 +43,7 @@ export default function App() {
   const [authStatus, setAuthStatus] = useState("Connecting...");
   const [dbError, setDbError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const pendingIdRef = useRef(null); // Track the item we are currently trying to add
 
   // App State
   const [menuItems, setMenuItems] = useState([]);
@@ -91,14 +91,21 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. DATA SYNC (ONLY AFTER AUTH)
+  // 2. DATA SYNC (WITH SMART LOADING CLEARING)
   useEffect(() => {
     if (!user) return;
 
     // Sync Menu
     const menuRef = collection(db, 'artifacts', appId, 'public', 'data', 'menu');
     const unsubMenu = onSnapshot(menuRef, (snap) => {
-      setMenuItems(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setMenuItems(items);
+
+      // SMART CHECK: If the item we just added appears in the list, stop the "Publishing" state
+      if (pendingIdRef.current && items.some(i => i.id === pendingIdRef.current)) {
+        setIsSaving(false);
+        pendingIdRef.current = null;
+      }
     }, (err) => {
       console.error(err);
       setDbError("Sync Error: " + err.message);
@@ -117,7 +124,7 @@ export default function App() {
     return () => { unsubMenu(); unsubSettings(); };
   }, [user]);
 
-  // Enhanced Firestore Helper to prevent infinite hangs
+  // Enhanced Firestore Helper
   const safeWrite = async (action) => {
     if (!user) {
       setDbError("Not Authenticated. Please wait for the 'Ready' status.");
@@ -126,51 +133,59 @@ export default function App() {
     
     setIsSaving(true);
     
-    // Create a timeout so it doesn't stay "Publishing" forever
+    // Safety timeout: If it takes more than 5 seconds, we force-clear the UI
     const timeout = setTimeout(() => {
       if (isSaving) {
         setIsSaving(false);
-        setDbError("Request timed out. Check your internet or Firebase Rules.");
+        pendingIdRef.current = null;
       }
-    }, 8000);
+    }, 5000);
 
     try {
       await action();
       setDbError(null);
-      clearTimeout(timeout);
     } catch (e) {
       console.error(e);
       setDbError("Write Failed: " + e.message);
-      clearTimeout(timeout);
-    } finally {
       setIsSaving(false);
+      pendingIdRef.current = null;
+    } finally {
+      clearTimeout(timeout);
     }
   };
 
-  const addNewItem = () => safeWrite(async () => {
+  const addNewItem = () => {
     if (!newItem.name || !newItem.price) {
       setDbError("Please enter a name and price.");
       return;
     }
-    const id = "item_" + Date.now();
-    const itemData = {
-      ...newItem,
-      id,
-      price: parseInt(newItem.price),
-      salePrice: newItem.salePrice ? parseInt(newItem.salePrice) : null,
-      createdAt: new Date().toISOString()
-    };
     
-    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id), itemData);
-    setNewItem({ name: "", price: "", salePrice: "", desc: "", image: "", category: "Burgers" });
-  });
+    const id = "item_" + Date.now();
+    pendingIdRef.current = id; // Tell the sync effect to watch for this ID
+
+    safeWrite(async () => {
+      const itemData = {
+        ...newItem,
+        id,
+        price: parseInt(newItem.price),
+        salePrice: newItem.salePrice ? parseInt(newItem.salePrice) : null,
+        createdAt: new Date().toISOString()
+      };
+      
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id), itemData);
+      setNewItem({ name: "", price: "", salePrice: "", desc: "", image: "", category: "Burgers" });
+      // Note: setIsSaving(false) will be handled by the onSnapshot listener for a smoother UI experience
+    });
+  };
 
   const deleteItem = (id) => safeWrite(async () => {
     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id));
+    setIsSaving(false);
   });
 
   const updateSetting = (key, val) => safeWrite(async () => {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { [key]: val }, { merge: true });
+    setIsSaving(false);
   });
 
   // UI Handlers
@@ -246,16 +261,16 @@ export default function App() {
                 </select>
                 <input className="bg-slate-50 p-5 rounded-2xl outline-none border border-slate-100" placeholder="Price (IQD)" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
                 <input className="bg-slate-50 p-5 rounded-2xl outline-none border border-slate-100" placeholder="Sale Price (Optional)" value={newItem.salePrice} onChange={e => setNewItem({...newItem, salePrice: e.target.value})} />
-                <input className="md:col-span-2 bg-slate-50 p-5 rounded-2xl outline-none border border-slate-100" placeholder="Image URL (Unsplash works best)" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
+                <input className="md:col-span-2 bg-slate-50 p-5 rounded-2xl outline-none border border-slate-100" placeholder="Image URL" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
               </div>
               <button 
                 onClick={addNewItem} 
                 disabled={isSaving || authStatus !== 'Ready'} 
-                className="w-full py-6 bg-slate-950 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 relative overflow-hidden"
+                className="w-full py-6 bg-slate-950 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 relative overflow-hidden active:scale-95 transition-transform"
               >
                 {isSaving ? (
                   <span className="flex items-center justify-center gap-2">
-                    <span className="animate-spin text-lg">⏳</span> Publishing to Menu...
+                    <span className="animate-spin text-lg">⏳</span> Serving...
                   </span>
                 ) : "Add to Menu"}
               </button>
@@ -264,7 +279,7 @@ export default function App() {
             <div className="space-y-4">
               <h3 className="text-xl font-black uppercase italic px-4">Current Menu ({menuItems.length})</h3>
               {menuItems.length === 0 && <p className="p-10 text-center text-slate-400 font-bold italic">The grill is empty...</p>}
-              {menuItems.map(item => (
+              {menuItems.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).map(item => (
                 <div key={item.id} className="bg-white p-4 rounded-3xl flex items-center justify-between border border-slate-100 shadow-sm animate-in fade-in zoom-in duration-300">
                   <div className="flex items-center gap-4">
                     <img src={item.image || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=200'} className="w-16 h-16 rounded-2xl object-cover" />
