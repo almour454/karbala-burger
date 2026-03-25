@@ -6,7 +6,8 @@ import {
   doc, 
   setDoc, 
   deleteDoc,
-  onSnapshot
+  onSnapshot,
+  enableIndexedDbPersistence
 } from "firebase/firestore"; 
 import { 
   getAuth, 
@@ -33,7 +34,9 @@ const firebaseConfig = typeof window !== 'undefined' && window.__firebase_config
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof window !== 'undefined' && window.__app_id ? window.__app_id : 'karbala-burger-v1';
+
+// 🛡️ HARDCODED APP ID - This prevents data loss on refresh
+const FIXED_APP_ID = "karbala-burger-production-v1"; 
 
 const OWNER_PASSWORD = "KarbalaGrill2024"; 
 
@@ -43,11 +46,12 @@ export default function App() {
   const [authStatus, setAuthStatus] = useState("Connecting...");
   const [dbError, setDbError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
-  const pendingIdRef = useRef(null); // Track the item we are currently trying to add
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const pendingIdRef = useRef(null);
 
   // App State
   const [menuItems, setMenuItems] = useState([]);
-  const [categories, setCategories] = useState(["Burgers", "Drinks", "Mandi"]);
+  const [categories, setCategories] = useState(["Burgers", "Drinks", "Mandi", "Appetizers"]);
   const [settings, setSettings] = useState({
     restaurantName: "AL KARBALA BURGER",
     tagline: "The King of Grill",
@@ -62,10 +66,9 @@ export default function App() {
   const [passInput, setPassInput] = useState("");
   const [newItem, setNewItem] = useState({ name: "", price: "", salePrice: "", desc: "", image: "", category: "Burgers" });
 
-  // 1. AUTHENTICATION (RULE 3)
+  // 1. AUTHENTICATION
   useEffect(() => {
     const initAuth = async () => {
-      setAuthStatus("Attempting Login...");
       try {
         const token = typeof window !== 'undefined' ? window.__initial_auth_token : null;
         if (token) {
@@ -74,126 +77,82 @@ export default function App() {
           await signInAnonymously(auth);
         }
       } catch (err) {
-        console.error("Auth Error:", err);
-        setAuthStatus("Auth Failed: " + err.code);
-        setDbError(`Login Failed: ${err.message}. Ensure 'Anonymous' is enabled in Firebase Auth.`);
+        setAuthStatus("Auth Error");
+        setDbError("Authentication failed. Check Firebase console.");
       }
     };
 
     initAuth();
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
+    onAuthStateChanged(auth, (u) => {
       setUser(u);
-      if (u) {
-        setAuthStatus("Ready");
-        setDbError(null);
-      }
+      if (u) setAuthStatus("Connected");
     });
-    return () => unsubscribe();
   }, []);
 
-  // 2. DATA SYNC (WITH SMART LOADING CLEARING)
+  // 2. REAL-TIME CLOUD SYNC
   useEffect(() => {
     if (!user) return;
 
-    // Sync Menu
-    const menuRef = collection(db, 'artifacts', appId, 'public', 'data', 'menu');
+    // Listen for Menu
+    const menuRef = collection(db, 'artifacts', FIXED_APP_ID, 'public', 'data', 'menu');
     const unsubMenu = onSnapshot(menuRef, (snap) => {
       const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setMenuItems(items);
-
-      // SMART CHECK: If the item we just added appears in the list, stop the "Publishing" state
+      setIsDataLoaded(true);
+      
       if (pendingIdRef.current && items.some(i => i.id === pendingIdRef.current)) {
         setIsSaving(false);
         pendingIdRef.current = null;
       }
-    }, (err) => {
-      console.error(err);
-      setDbError("Sync Error: " + err.message);
-    });
+    }, (err) => setDbError("Cloud Sync Error: " + err.message));
 
-    // Sync Settings
-    const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
+    // Listen for Settings
+    const settingsRef = doc(db, 'artifacts', FIXED_APP_ID, 'public', 'data', 'settings', 'global');
     const unsubSettings = onSnapshot(settingsRef, (snap) => {
       if (snap.exists()) {
-        const data = snap.data();
-        setSettings(prev => ({ ...prev, ...data }));
-        if (data.categories) setCategories(data.categories);
+        setSettings(prev => ({ ...prev, ...snap.data() }));
       }
     });
 
     return () => { unsubMenu(); unsubSettings(); };
   }, [user]);
 
-  // Enhanced Firestore Helper
   const safeWrite = async (action) => {
-    if (!user) {
-      setDbError("Not Authenticated. Please wait for the 'Ready' status.");
-      return;
-    }
-    
+    if (!user) return setDbError("Wait for connection...");
     setIsSaving(true);
-    
-    // Safety timeout: If it takes more than 5 seconds, we force-clear the UI
-    const timeout = setTimeout(() => {
-      if (isSaving) {
-        setIsSaving(false);
-        pendingIdRef.current = null;
-      }
-    }, 5000);
-
     try {
       await action();
-      setDbError(null);
     } catch (e) {
-      console.error(e);
-      setDbError("Write Failed: " + e.message);
+      setDbError("Save failed: " + e.message);
       setIsSaving(false);
-      pendingIdRef.current = null;
-    } finally {
-      clearTimeout(timeout);
     }
   };
 
   const addNewItem = () => {
-    if (!newItem.name || !newItem.price) {
-      setDbError("Please enter a name and price.");
-      return;
-    }
-    
+    if (!newItem.name || !newItem.price) return;
     const id = "item_" + Date.now();
-    pendingIdRef.current = id; // Tell the sync effect to watch for this ID
-
+    pendingIdRef.current = id;
+    
     safeWrite(async () => {
-      const itemData = {
+      await setDoc(doc(db, 'artifacts', FIXED_APP_ID, 'public', 'data', 'menu', id), {
         ...newItem,
         id,
-        price: parseInt(newItem.price),
-        salePrice: newItem.salePrice ? parseInt(newItem.salePrice) : null,
+        price: Number(newItem.price),
+        salePrice: newItem.salePrice ? Number(newItem.salePrice) : null,
         createdAt: new Date().toISOString()
-      };
-      
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id), itemData);
+      });
       setNewItem({ name: "", price: "", salePrice: "", desc: "", image: "", category: "Burgers" });
-      // Note: setIsSaving(false) will be handled by the onSnapshot listener for a smoother UI experience
     });
   };
 
   const deleteItem = (id) => safeWrite(async () => {
-    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id));
+    await deleteDoc(doc(db, 'artifacts', FIXED_APP_ID, 'public', 'data', 'menu', id));
     setIsSaving(false);
   });
 
   const updateSetting = (key, val) => safeWrite(async () => {
-    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { [key]: val }, { merge: true });
+    await setDoc(doc(db, 'artifacts', FIXED_APP_ID, 'public', 'data', 'settings', 'global'), { [key]: val }, { merge: true });
     setIsSaving(false);
-  });
-
-  // UI Handlers
-  const addToCart = (item) => setCart(p => ({ ...p, [item.id]: (p[item.id] || 0) + 1 }));
-  const removeFromCart = (id) => setCart(p => {
-    const n = { ...p };
-    if (n[id] > 1) n[id]--; else delete n[id];
-    return n;
   });
 
   const cartTotal = useMemo(() => Object.entries(cart).reduce((t, [id, q]) => {
@@ -208,132 +167,124 @@ export default function App() {
   }, {}), [categories, menuItems]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-orange-100">
+    <div className="min-h-screen bg-[#fafafa] text-[#1a1a1a] font-sans">
       
-      {/* 🛠️ ERROR NOTIFICATION */}
+      {/* 🛠️ SYSTEM STATUS */}
       {dbError && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 w-full max-w-md px-6 z-[5000] animate-bounce">
-          <div className="bg-red-600 text-white p-4 rounded-2xl text-center text-xs font-black shadow-2xl flex items-center justify-between">
-            <span>🚨 {dbError}</span>
-            <button onClick={() => setDbError(null)} className="bg-white/20 p-2 rounded-lg">✕</button>
-          </div>
+        <div className="fixed top-0 left-0 w-full bg-red-600 text-white p-2 text-[10px] font-black uppercase text-center z-[9999]">
+          {dbError} <button onClick={() => window.location.reload()} className="underline ml-2">Reload</button>
         </div>
       )}
 
-      {/* Nav */}
-      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[1000] flex bg-black p-1.5 rounded-full border border-white/10 shadow-2xl backdrop-blur-md">
-        <button onClick={() => setView("customer")} className={`px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'customer' ? 'text-white' : 'text-slate-500'}`} style={view === 'customer' ? { backgroundColor: settings.primaryColor } : {}}>Menu</button>
-        <button onClick={() => setView("owner")} className={`px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'owner' ? 'bg-white text-black' : 'text-slate-500'}`}>Admin</button>
-      </div>
+      {/* Navigation */}
+      <nav className="fixed top-6 left-1/2 -translate-x-1/2 z-[1000] flex bg-black/90 backdrop-blur-xl p-1 rounded-full border border-white/10 shadow-2xl">
+        <button onClick={() => setView("customer")} className={`px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'customer' ? 'bg-orange-600 text-white' : 'text-slate-400'}`}>Menu</button>
+        <button onClick={() => setView("owner")} className={`px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'owner' ? 'bg-white text-black' : 'text-slate-400'}`}>Admin</button>
+      </nav>
 
       {view === "owner" ? (
         !isUnlocked ? (
-          <div className="min-h-screen flex items-center justify-center bg-slate-950 p-6">
-            <div className="bg-white/5 border border-white/10 p-10 rounded-[3rem] w-full max-w-sm text-center">
-              <div className="w-16 h-16 bg-orange-500 rounded-2xl mx-auto mb-6 flex items-center justify-center text-2xl rotate-6">🔐</div>
-              <h2 className="text-white text-2xl font-black uppercase italic mb-6">Staff Only</h2>
-              <input type="password" value={passInput} onChange={e => setPassInput(e.target.value)} className="w-full bg-black p-5 rounded-2xl text-white text-center mb-4 outline-none border border-white/10" placeholder="Password" />
-              <button onClick={() => passInput === OWNER_PASSWORD ? setIsUnlocked(true) : setDbError("Wrong Password")} className="w-full py-5 bg-orange-600 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest">Unlock Grill</button>
-              <p className="mt-6 text-[10px] text-slate-500 uppercase font-black">Connection: {authStatus}</p>
+          <div className="min-h-screen flex items-center justify-center bg-[#050505] p-6">
+            <div className="w-full max-w-sm text-center">
+              <h2 className="text-white text-4xl font-black italic uppercase mb-8 tracking-tighter">Owner Login</h2>
+              <input type="password" value={passInput} onChange={e => setPassInput(e.target.value)} className="w-full bg-white/5 border border-white/10 p-6 rounded-3xl text-white text-center mb-4 outline-none focus:border-orange-500 transition-colors" placeholder="••••••••" />
+              <button onClick={() => passInput === OWNER_PASSWORD ? setIsUnlocked(true) : setDbError("Wrong Password")} className="w-full py-6 bg-orange-600 text-white font-black rounded-3xl uppercase text-[10px] tracking-widest hover:bg-orange-500 transition-colors">Enter Kitchen</button>
+              <div className="mt-8 flex items-center justify-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${authStatus === 'Connected' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                <span className="text-[10px] text-white/30 font-black uppercase tracking-widest">{authStatus}</span>
+              </div>
             </div>
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto pt-32 pb-40 px-6">
-            <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 mb-10">
-              <div className="flex justify-between items-center mb-8">
-                <h2 className="text-3xl font-black uppercase italic" style={{ color: settings.primaryColor }}>Shop Settings</h2>
-                <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${authStatus === 'Ready' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
-                  {authStatus}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <input className="bg-slate-50 p-5 rounded-2xl outline-none border border-slate-100" placeholder="Shop Name" value={settings.restaurantName} onChange={e => updateSetting("restaurantName", e.target.value)} />
-                <input className="bg-slate-50 p-5 rounded-2xl outline-none border border-slate-100" placeholder="WhatsApp Number" value={settings.whatsapp} onChange={e => updateSetting("whatsapp", e.target.value)} />
-              </div>
-            </div>
-
-            <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 mb-10">
-              <h2 className="text-3xl font-black uppercase italic mb-8">Add New Item</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <input className="bg-slate-50 p-5 rounded-2xl outline-none border border-slate-100" placeholder="Item Name" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
-                <select className="bg-slate-50 p-5 rounded-2xl outline-none border border-slate-100" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})}>
-                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <input className="bg-slate-50 p-5 rounded-2xl outline-none border border-slate-100" placeholder="Price (IQD)" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
-                <input className="bg-slate-50 p-5 rounded-2xl outline-none border border-slate-100" placeholder="Sale Price (Optional)" value={newItem.salePrice} onChange={e => setNewItem({...newItem, salePrice: e.target.value})} />
-                <input className="md:col-span-2 bg-slate-50 p-5 rounded-2xl outline-none border border-slate-100" placeholder="Image URL" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
-              </div>
-              <button 
-                onClick={addNewItem} 
-                disabled={isSaving || authStatus !== 'Ready'} 
-                className="w-full py-6 bg-slate-950 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 relative overflow-hidden active:scale-95 transition-transform"
-              >
-                {isSaving ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="animate-spin text-lg">⏳</span> Serving...
-                  </span>
-                ) : "Add to Menu"}
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-xl font-black uppercase italic px-4">Current Menu ({menuItems.length})</h3>
-              {menuItems.length === 0 && <p className="p-10 text-center text-slate-400 font-bold italic">The grill is empty...</p>}
-              {menuItems.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).map(item => (
-                <div key={item.id} className="bg-white p-4 rounded-3xl flex items-center justify-between border border-slate-100 shadow-sm animate-in fade-in zoom-in duration-300">
-                  <div className="flex items-center gap-4">
-                    <img src={item.image || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=200'} className="w-16 h-16 rounded-2xl object-cover" />
-                    <div>
-                      <p className="font-black uppercase text-sm">{item.name}</p>
-                      <p className="text-[10px] text-slate-400 font-bold">{item.category} • {item.price.toLocaleString()} IQD</p>
-                    </div>
-                  </div>
-                  <button onClick={() => deleteItem(item.id)} className="p-4 text-red-500 font-black text-xs uppercase hover:bg-red-50 rounded-2xl transition-colors">Delete</button>
+          <div className="max-w-4xl mx-auto pt-32 pb-40 px-6 animate-in fade-in duration-700">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+              <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+                <h3 className="text-sm font-black uppercase mb-6 opacity-30">Shop Settings</h3>
+                <div className="space-y-4">
+                  <input className="w-full bg-slate-50 p-4 rounded-2xl text-sm font-bold border border-transparent focus:border-orange-500 outline-none" placeholder="Shop Name" value={settings.restaurantName} onChange={e => setSettings({...settings, restaurantName: e.target.value})} onBlur={e => updateSetting("restaurantName", e.target.value)} />
+                  <input className="w-full bg-slate-50 p-4 rounded-2xl text-sm font-bold border border-transparent focus:border-orange-500 outline-none" placeholder="WhatsApp Number" value={settings.whatsapp} onChange={e => setSettings({...settings, whatsapp: e.target.value})} onBlur={e => updateSetting("whatsapp", e.target.value)} />
                 </div>
-              ))}
+              </div>
+
+              <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+                <h3 className="text-sm font-black uppercase mb-6 opacity-30">Add Product</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <input className="col-span-2 bg-slate-50 p-4 rounded-2xl text-sm font-bold outline-none" placeholder="Item Name" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                  <input className="bg-slate-50 p-4 rounded-2xl text-sm font-bold outline-none" placeholder="Price IQD" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
+                  <select className="bg-slate-50 p-4 rounded-2xl text-sm font-bold outline-none" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})}>
+                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <input className="col-span-2 bg-slate-50 p-4 rounded-2xl text-sm font-bold outline-none" placeholder="Image URL (Optional)" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
+                  <button onClick={addNewItem} disabled={isSaving} className="col-span-2 py-4 bg-black text-white rounded-2xl font-black uppercase text-[10px] tracking-widest disabled:opacity-50">
+                    {isSaving ? "Syncing..." : "Add to Menu"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-xs font-black uppercase px-4 opacity-30 tracking-widest">Live Menu ({menuItems.length})</h3>
+              {!isDataLoaded ? (
+                <div className="p-20 text-center animate-pulse font-black uppercase text-xs text-slate-300">Loading Cloud Data...</div>
+              ) : (
+                menuItems.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).map(item => (
+                  <div key={item.id} className="bg-white p-4 rounded-3xl flex items-center justify-between border border-slate-100 group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-slate-100 rounded-xl overflow-hidden">
+                        <img src={item.image || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=100'} className="w-full h-full object-cover" />
+                      </div>
+                      <div>
+                        <p className="font-black uppercase text-xs">{item.name}</p>
+                        <p className="text-[10px] text-slate-400 font-bold">{item.price.toLocaleString()} IQD</p>
+                      </div>
+                    </div>
+                    <button onClick={() => deleteItem(item.id)} className="px-4 py-2 text-red-500 font-black text-[10px] uppercase hover:bg-red-50 rounded-xl opacity-0 group-hover:opacity-100 transition-all">Remove</button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )
       ) : (
         <div className="pb-40">
-          <header className="pt-40 pb-20 px-6 text-center">
-            <h1 className="text-7xl md:text-9xl font-black italic uppercase tracking-tighter leading-none mb-6">
+          <header className="pt-40 pb-20 px-6 text-center max-w-4xl mx-auto">
+            <h1 className="text-6xl md:text-8xl font-black italic uppercase tracking-tighter leading-none mb-6">
               {settings.restaurantName}
             </h1>
-            <p className="text-[10px] font-black uppercase tracking-[1em] text-slate-400">{settings.tagline}</p>
+            <div className="h-1 w-20 bg-orange-600 mx-auto mb-6"></div>
+            <p className="text-[10px] font-black uppercase tracking-[0.8em] text-slate-400 leading-loose">{settings.tagline}</p>
           </header>
 
           <main className="max-w-6xl mx-auto px-6">
             {Object.entries(groupedMenu).map(([cat, items]) => (
-              <section key={cat} className="mb-20">
-                <h2 className="text-4xl font-black italic uppercase mb-10 border-b-4 border-black inline-block pb-2">{cat}</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              <section key={cat} className="mb-24">
+                <div className="flex items-center gap-6 mb-12">
+                  <h2 className="text-3xl font-black italic uppercase tracking-tight">{cat}</h2>
+                  <div className="flex-1 h-px bg-slate-200"></div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                   {items.map(item => (
-                    <div key={item.id} className="bg-white rounded-[3rem] p-4 border border-slate-100 shadow-sm group hover:shadow-2xl transition-all">
-                      <div className="h-64 rounded-[2.5rem] overflow-hidden mb-6 bg-slate-100">
-                        <img src={item.image || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=600'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                    <div key={item.id} className="group relative">
+                      <div className="aspect-[4/5] rounded-[3rem] overflow-hidden bg-slate-100 mb-6 shadow-sm border border-slate-100">
+                        <img src={item.image || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=600'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                       </div>
-                      <div className="px-4 pb-4">
+                      
+                      <div className="px-2">
                         <div className="flex justify-between items-start mb-2">
-                          <h3 className="text-xl font-black uppercase italic">{item.name}</h3>
-                          <div className="text-right">
-                            {item.salePrice ? (
-                              <p className="font-black text-orange-600">{item.salePrice.toLocaleString()} <span className="text-[8px]">IQD</span></p>
-                            ) : (
-                              <p className="font-black">{item.price.toLocaleString()} <span className="text-[8px]">IQD</span></p>
-                            )}
-                          </div>
+                          <h3 className="text-xl font-black uppercase italic tracking-tight">{item.name}</h3>
+                          <p className="font-black text-orange-600">{item.price.toLocaleString()} <span className="text-[8px] uppercase">IQD</span></p>
                         </div>
-                        <p className="text-xs text-slate-400 mb-6 font-medium leading-relaxed">{item.desc || "Freshly grilled and served hot."}</p>
+                        <p className="text-[11px] text-slate-400 mb-6 font-bold leading-relaxed line-clamp-2">The finest ingredients grilled to perfection by the masters of Karbala.</p>
                         
                         {cart[item.id] ? (
-                          <div className="flex bg-slate-950 text-white rounded-2xl p-1">
-                            <button onClick={() => removeFromCart(item.id)} className="flex-1 py-3 font-black text-lg">－</button>
-                            <span className="flex-1 text-center py-3 font-black">{cart[item.id]}</span>
-                            <button onClick={() => addToCart(item)} className="flex-1 py-3 font-black text-lg">＋</button>
+                          <div className="flex bg-black text-white rounded-2xl p-1 items-center">
+                            <button onClick={() => removeFromCart(item.id)} className="w-12 h-12 flex items-center justify-center font-black text-lg hover:text-orange-500 transition-colors">－</button>
+                            <span className="flex-1 text-center font-black text-xs">{cart[item.id]} IN TRAY</span>
+                            <button onClick={() => addToCart(item)} className="w-12 h-12 flex items-center justify-center font-black text-lg hover:text-orange-500 transition-colors">＋</button>
                           </div>
                         ) : (
-                          <button onClick={() => addToCart(item)} className="w-full py-4 rounded-2xl border-2 border-slate-100 font-black uppercase text-[10px] tracking-widest hover:bg-slate-950 hover:text-white transition-all">Add to Tray</button>
+                          <button onClick={() => addToCart(item)} className="w-full py-4 rounded-2xl bg-white border border-slate-200 shadow-sm font-black uppercase text-[10px] tracking-widest hover:bg-black hover:text-white hover:border-black transition-all">Add to Tray</button>
                         )}
                       </div>
                     </div>
@@ -343,30 +294,48 @@ export default function App() {
             ))}
           </main>
 
+          {/* Floating Cart Button */}
           {cartTotal > 0 && (
-            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-sm px-6 z-[2000]">
-              <button onClick={() => setIsCheckoutOpen(true)} className="w-full bg-slate-950 text-white p-6 rounded-[2.5rem] shadow-2xl flex items-center justify-between group overflow-hidden">
-                <div className="relative z-10">
-                  <p className="text-[8px] font-black uppercase text-slate-500 mb-1">Total Order</p>
-                  <p className="text-2xl font-black italic tracking-tighter" style={{ color: settings.primaryColor }}>{cartTotal.toLocaleString()} IQD</p>
+            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-md px-6 z-[2000] animate-in slide-in-from-bottom-10">
+              <button onClick={() => setIsCheckoutOpen(true)} className="w-full bg-black text-white p-2 rounded-full shadow-2xl flex items-center overflow-hidden">
+                <div className="bg-orange-600 h-14 w-14 rounded-full flex items-center justify-center font-black text-xs italic">
+                  {Object.values(cart).reduce((a,b)=>a+b, 0)}
                 </div>
-                <div className="bg-orange-600 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest relative z-10">Checkout</div>
-                <div className="absolute top-0 right-0 w-32 h-32 bg-orange-600/20 rounded-full -mr-10 -mt-10 group-hover:scale-150 transition-transform"></div>
+                <div className="flex-1 px-6 text-left">
+                  <p className="text-[8px] font-black uppercase opacity-40">Complete Order</p>
+                  <p className="text-lg font-black italic tracking-tight">{cartTotal.toLocaleString()} IQD</p>
+                </div>
+                <div className="pr-8 font-black text-[10px] uppercase tracking-widest animate-pulse">Checkout →</div>
               </button>
             </div>
           )}
 
+          {/* Modal */}
           {isCheckoutOpen && (
-            <div className="fixed inset-0 z-[3000] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-6">
-              <div className="bg-white w-full max-w-md rounded-[4rem] p-12 animate-in slide-in-from-bottom-10">
-                <h2 className="text-4xl font-black italic uppercase mb-8">Delivery Info</h2>
-                <textarea className="w-full p-6 bg-slate-50 rounded-3xl h-32 mb-6 border border-slate-100 outline-none focus:ring-2 ring-orange-500 font-bold" placeholder="Your Address / Location..." value={address} onChange={e => setAddress(e.target.value)} />
+            <div className="fixed inset-0 z-[3000] bg-black/80 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-6">
+              <div className="bg-white w-full max-w-lg rounded-t-[3rem] md:rounded-[4rem] p-10 md:p-14 animate-in slide-in-from-bottom-20">
+                <div className="w-12 h-1 bg-slate-100 mx-auto mb-8 rounded-full md:hidden"></div>
+                <h2 className="text-4xl font-black italic uppercase mb-2 tracking-tighter">Confirm Order</h2>
+                <p className="text-xs font-bold text-slate-400 mb-8 uppercase tracking-widest">Sent via WhatsApp to the kitchen</p>
+                
+                <div className="max-h-40 overflow-y-auto mb-8 space-y-2 pr-2">
+                   {Object.entries(cart).map(([id, q]) => {
+                     const itm = menuItems.find(m=>m.id===id);
+                     return (
+                       <div key={id} className="flex justify-between text-xs font-black uppercase italic">
+                         <span>{q}x {itm?.name}</span>
+                         <span className="text-slate-300">{(itm?.price * q).toLocaleString()} IQD</span>
+                       </div>
+                     );
+                   })}
+                </div>
+
+                <textarea className="w-full p-6 bg-slate-50 rounded-3xl h-32 mb-6 border border-slate-100 outline-none focus:ring-2 ring-orange-500 font-bold text-sm" placeholder="Neighborhood, Street, House No..." value={address} onChange={e => setAddress(e.target.value)} />
                 <button onClick={() => {
-                   const msg = `*ORDER FROM BURGER APP*\n\n${Object.entries(cart).map(([id, q]) => `• ${q}x ${menuItems.find(m=>m.id===id)?.name}`).join('\n')}\n\n*Total:* ${cartTotal} IQD\n*Address:* ${address}`;
+                   const msg = `*NEW ORDER - AL KARBALA BURGER*\n\n${Object.entries(cart).map(([id, q]) => `• ${q}x ${menuItems.find(m=>m.id===id)?.name}`).join('\n')}\n\n*Total:* ${cartTotal.toLocaleString()} IQD\n*Address:* ${address}`;
                    window.open(`https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
-                   setCart({}); setIsCheckoutOpen(false);
-                }} className="w-full py-6 bg-[#25D366] text-white font-black rounded-3xl uppercase text-[10px] tracking-widest shadow-xl">Send Order via WhatsApp</button>
-                <button onClick={() => setIsCheckoutOpen(false)} className="w-full mt-4 py-4 text-slate-400 font-black uppercase text-[10px]">Cancel</button>
+                }} className="w-full py-6 bg-[#25D366] text-white font-black rounded-3xl uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-transform">Confirm & Send to WhatsApp</button>
+                <button onClick={() => setIsCheckoutOpen(false)} className="w-full mt-4 py-4 text-slate-400 font-black uppercase text-[10px] tracking-widest">Go Back</button>
               </div>
             </div>
           )}
