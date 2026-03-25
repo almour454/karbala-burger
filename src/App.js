@@ -200,6 +200,10 @@ export default function App() {
     return menuItems.filter(item => item.category === activeCategory);
   }, [menuItems, activeCategory]);
 
+  const discountItems = useMemo(() => {
+    return menuItems.filter(item => item.salePrice && item.salePrice < item.price);
+  }, [menuItems]);
+
   const handleCheckout = () => {
     const items = Object.entries(cart).map(([id, q]) => `${q}x ${menuItems.find(m=>m.id===id)?.name}`).join('\n');
     const waUrl = `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(`🔥 ${settings.restaurantName} ORDER 🔥\n\n${items}\n\n💰 TOTAL: ${cartTotal.toLocaleString()} IQD\n📍 ADDR: ${address}`)}`;
@@ -271,7 +275,7 @@ export default function App() {
                 </div>
               </section>
 
-              {/* Add Item */}
+              {/* Add Item with Discount Tab Logic */}
               <section className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10">
                 <h3 className="text-sm font-black uppercase opacity-40 mb-6">New Item</h3>
                 <div className="grid grid-cols-2 gap-4">
@@ -279,7 +283,10 @@ export default function App() {
                   <select className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} >
                     {categories.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
-                  <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Price" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input className="bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Normal Price" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
+                    <input className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl text-sm text-orange-400 placeholder:text-orange-900" placeholder="Discount Price" value={newItem.salePrice} onChange={e => setNewItem({...newItem, salePrice: e.target.value})} />
+                  </div>
                   <input className="col-span-2 bg-black/40 border border-white/10 p-4 rounded-xl text-sm" placeholder="Image Link" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
                   <button onClick={addNewItem} className="col-span-2 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest" style={{ backgroundColor: settings.primaryColor }}>Save to Menu</button>
                 </div>
@@ -293,7 +300,10 @@ export default function App() {
                       <img src={item.image} className="w-12 h-12 rounded-lg object-cover bg-slate-800" />
                       <div>
                         <p className="font-bold text-xs uppercase">{item.name}</p>
-                        <p className="text-[10px] opacity-40">{item.category} • {item.price} IQD</p>
+                        <p className="text-[10px] opacity-40">
+                          {item.category} • {item.price} IQD 
+                          {item.salePrice && <span className="text-orange-500 ml-2">Sale: {item.salePrice} IQD</span>}
+                        </p>
                       </div>
                     </div>
                     <button onClick={() => deleteItem(item.id)} className="text-red-500 text-[10px] font-black uppercase px-4">Delete</button>
@@ -306,12 +316,47 @@ export default function App() {
       ) : (
         <div className="pb-40">
           {/* Mobile Header */}
-          <header className="pt-24 pb-12 px-6 text-center bg-white">
+          <header className="pt-24 pb-8 px-6 text-center bg-white">
              <h1 className="text-4xl font-black italic uppercase tracking-tighter leading-tight">
                 {settings.restaurantName}
              </h1>
              <p className="text-slate-400 text-[9px] font-black tracking-[0.6em] uppercase mt-2">{settings.tagline}</p>
           </header>
+
+          {/* 🔥 DISCOUNTS WINDOW (Horizontal Slider) */}
+          {discountItems.length > 0 && (
+            <section className="bg-white pt-2 pb-6">
+              <div className="px-6 flex items-center justify-between mb-4">
+                <h2 className="text-[11px] font-black uppercase tracking-widest text-orange-600">🔥 Hot Deals Today</h2>
+              </div>
+              <div className="flex gap-4 px-6 overflow-x-auto no-scrollbar pb-2">
+                {discountItems.map(item => (
+                  <div key={item.id} className="shrink-0 w-64 bg-orange-500 rounded-[2rem] p-4 text-white relative overflow-hidden shadow-lg shadow-orange-500/20">
+                    <div className="relative z-10">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="bg-white text-orange-600 text-[8px] font-black px-3 py-1 rounded-full uppercase">Save {(item.price - item.salePrice).toLocaleString()} IQD</span>
+                      </div>
+                      <h3 className="text-lg font-black italic uppercase leading-tight mb-4">{item.name}</h3>
+                      <div className="flex justify-between items-end">
+                        <div>
+                           <p className="text-[9px] opacity-60 line-through">{item.price.toLocaleString()} IQD</p>
+                           <p className="text-xl font-black">{item.salePrice.toLocaleString()} <span className="text-[10px]">IQD</span></p>
+                        </div>
+                        <button 
+                          onClick={() => addToCart(item)}
+                          className="bg-white text-orange-600 w-10 h-10 rounded-full flex items-center justify-center font-black shadow-lg shadow-black/10 active:scale-90 transition-transform"
+                        >
+                          ＋
+                        </button>
+                      </div>
+                    </div>
+                    {/* Decorative Background Image Overlay */}
+                    <img src={item.image} className="absolute top-0 right-0 w-32 h-32 object-cover opacity-20 -mr-6 -mt-6 rounded-full rotate-12" />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* 🍔 CATEGORY SELECTOR (Horizontal Scroll) */}
           <div className="sticky top-[68px] z-[900] bg-slate-50/80 backdrop-blur-lg py-4 border-b border-slate-200">
@@ -350,13 +395,25 @@ export default function App() {
                   <div className="flex-1 py-1 pr-2">
                     <div className="flex justify-between items-start mb-1">
                       <h3 className="text-sm font-black uppercase italic tracking-tight leading-tight">{item.name}</h3>
+                      {item.salePrice && <span className="bg-orange-100 text-orange-600 text-[7px] font-black px-2 py-0.5 rounded-full uppercase">Sale</span>}
                     </div>
                     <p className="text-[10px] text-slate-400 font-bold mb-3 line-clamp-1">{item.desc || "Prepared fresh daily."}</p>
                     
                     <div className="flex justify-between items-end">
-                      <p className="font-black text-sm" style={{ color: settings.primaryColor }}>
-                        {item.price.toLocaleString()} <span className="text-[8px] opacity-60">IQD</span>
-                      </p>
+                      <div>
+                        {item.salePrice ? (
+                          <div className="flex flex-col">
+                            <span className="text-[8px] text-slate-300 line-through leading-none mb-0.5">{item.price.toLocaleString()} IQD</span>
+                            <p className="font-black text-sm" style={{ color: settings.primaryColor }}>
+                              {item.salePrice.toLocaleString()} <span className="text-[8px] opacity-60">IQD</span>
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="font-black text-sm" style={{ color: settings.primaryColor }}>
+                            {item.price.toLocaleString()} <span className="text-[8px] opacity-60">IQD</span>
+                          </p>
+                        )}
+                      </div>
                       
                       {cart[item.id] ? (
                         <div className="flex items-center bg-slate-900 text-white rounded-xl p-0.5 scale-90 origin-right">
