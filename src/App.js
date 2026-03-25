@@ -201,7 +201,7 @@ export default function App() {
   }, [menuItems, activeCategory]);
 
   const discountItems = useMemo(() => {
-    return menuItems.filter(item => item.salePrice && item.salePrice < item.price);
+    return menuItems.filter(item => !item.hidden && item.salePrice && item.salePrice < item.price);
   }, [menuItems]);
 
   const sendWhatsApp = () => {
@@ -250,9 +250,15 @@ export default function App() {
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="اسم المطعم EN" value={settings.restaurantName} onChange={e => updateGlobalSettings("restaurantName", e.target.value)} />
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="اسم المطعم AR" value={settings.restaurantNameAr} onChange={e => updateGlobalSettings("restaurantNameAr", e.target.value)} />
                 <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="واتساب (964...)" value={settings.whatsapp} onChange={e => updateGlobalSettings("whatsapp", e.target.value)} />
+                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="أوقات العمل" value={settings.openingHours} onChange={e => updateGlobalSettings("openingHours", e.target.value)} />
+                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2" placeholder="وصف الموقع / العنوان" value={settings.locationDesc} onChange={e => updateGlobalSettings("locationDesc", e.target.value)} />
                 <div className="flex items-center gap-4 bg-black/40 p-4 rounded-xl border border-white/5">
                   <span className="text-white text-[10px] font-bold">اللون الأساسي</span>
                   <input type="color" className="w-10 h-10 rounded bg-transparent border-0 cursor-pointer" value={settings.primaryColor} onChange={e => updateGlobalSettings("primaryColor", e.target.value)} />
+                </div>
+                <div className="flex items-center gap-4 bg-black/40 p-4 rounded-xl border border-white/5">
+                  <span className="text-white text-[10px] font-bold">لون الخلفية</span>
+                  <input type="color" className="w-10 h-10 rounded bg-transparent border-0 cursor-pointer" value={settings.bgColor} onChange={e => updateGlobalSettings("bgColor", e.target.value)} />
                 </div>
               </div>
             </section>
