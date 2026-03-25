@@ -53,7 +53,7 @@ const SafeImage = ({ src, alt, className, priority = false }) => {
         src={src || 'https://via.placeholder.com/400x300?text=No+Image'} 
         alt={alt}
         loading={priority ? "eager" : "lazy"}
-        className={`w-full h-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`w-full h-full object-cover transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
         onLoad={() => setLoaded(true)}
       />
       {!loaded && <div className="absolute inset-0 animate-pulse bg-slate-300" />}
@@ -67,28 +67,43 @@ export default function App() {
   
   // Load initial data from LocalStorage for "Instant-On" feel
   const [menuItems, setMenuItems] = useState(() => {
-    const saved = localStorage.getItem(`menu_${appId}`);
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem(`menu_${appId}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) { return []; }
   });
   
   const [categories, setCategories] = useState(() => {
-    const saved = localStorage.getItem(`cats_${appId}`);
-    return saved ? JSON.parse(saved) : ["Burgers", "Drinks", "Mandi"];
+    try {
+      const saved = localStorage.getItem(`cats_${appId}`);
+      return saved ? JSON.parse(saved) : ["Burgers", "Drinks", "Mandi"];
+    } catch (e) { return ["Burgers", "Drinks", "Mandi"]; }
   });
 
   const [settings, setSettings] = useState(() => {
-    const saved = localStorage.getItem(`settings_${appId}`);
-    return saved ? JSON.parse(saved) : {
-      restaurantName: "AL KARBALA BURGER",
-      tagline: "Best Grill in the City",
-      primaryColor: "#ea580c",
-      whatsapp: "964780000000",
-      openingHours: "12:00 PM - 12:00 AM",
-      locationDesc: "Karbala, City Center"
-    };
+    try {
+      const saved = localStorage.getItem(`settings_${appId}`);
+      return saved ? JSON.parse(saved) : {
+        restaurantName: "AL KARBALA BURGER",
+        tagline: "Best Grill in the City",
+        primaryColor: "#ea580c",
+        whatsapp: "964780000000",
+        openingHours: "12:00 PM - 12:00 AM",
+        locationDesc: "Karbala, City Center"
+      };
+    } catch (e) { return {
+        restaurantName: "AL KARBALA BURGER",
+        tagline: "Best Grill in the City",
+        primaryColor: "#ea580c",
+        whatsapp: "964780000000",
+        openingHours: "12:00 PM - 12:00 AM",
+        locationDesc: "Karbala, City Center"
+      };
+    }
   });
 
   const [cart, setCart] = useState({});
+  // FORCED CHANGE: We don't wait for loading anymore. If we have local storage, we show it instantly.
   const [loading, setLoading] = useState(menuItems.length === 0);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [address, setAddress] = useState("");
@@ -169,10 +184,12 @@ export default function App() {
     return n;
   });
 
-  if (loading) return (
+  // If loading is true AND we have no local cache, then show a minimal spinner.
+  // This prevents the "blank screen of death" for 35 seconds.
+  if (loading && menuItems.length === 0) return (
     <div className="min-h-screen flex items-center justify-center bg-white">
       <div className="flex flex-col items-center gap-4">
-        <div className="w-10 h-10 border-2 border-slate-100 border-t-orange-500 rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-2 border-slate-100 border-t-orange-500 rounded-full animate-spin"></div>
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Firing up the grill...</p>
       </div>
     </div>
@@ -253,7 +270,7 @@ export default function App() {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                   {items.map((item, idx) => (
-                    <div key={item.id} className="bg-white rounded-[2.5rem] overflow-hidden border border-slate-100 shadow-sm flex flex-col group hover:shadow-xl transition-all duration-500">
+                    <div key={item.id} className="bg-white rounded-[2.5rem] overflow-hidden border border-slate-100 shadow-sm flex flex-col group hover:shadow-xl transition-all duration-300">
                       <SafeImage src={item.image} alt={item.name} className="h-64" priority={idx < 3} />
                       <div className="p-8 flex-1 flex flex-col">
                         <div className="flex justify-between items-start mb-4">
