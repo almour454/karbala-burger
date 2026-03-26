@@ -6,12 +6,14 @@ import {
   onSnapshot, 
   doc, 
   getDoc,
+  getDocs,
   setDoc,
   addDoc,
   updateDoc,
   deleteDoc,
   query,
-  orderBy
+  orderBy,
+  runTransaction
 } from "firebase/firestore";
 import { 
   getAuth, 
@@ -67,7 +69,11 @@ const appId =
 const getMenuCollection = () => collection(db, 'artifacts', appId, 'public', 'data', 'menu');
 const getSettingsDoc = () => doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
 const getOwnerDoc = () => doc(db, 'artifacts', appId, 'private', 'data', 'admin', 'owner');
-const getOrdersCollection = () => collection(db, 'artifacts', appId, 'private', 'data', 'orders');
+// Orders stored per-day: /orders/{dateStr}/items/{orderId}
+const getOrdersCollection = (dateStr) => collection(db, 'artifacts', appId, 'private', 'data', 'orders', dateStr, 'items');
+// Counter doc stores the daily order count: /orders/{dateStr}/meta/counter
+const getOrderCounterDoc = (dateStr) => doc(db, 'artifacts', appId, 'private', 'data', 'orders', dateStr, 'meta', 'counter');
+const getDateStr = () => new Date().toLocaleDateString('en-CA');
 
 const PLACEHOLDER = "https://images.unsplash.com/photo-1550547660-d9450f859349?q=80&w=200&auto=format&fit=crop";
 
@@ -129,6 +135,13 @@ export default function App() {
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [orders, setOrders] = useState([]);
   const [adminTab, setAdminTab] = useState("orders");
+  const [historyDate, setHistoryDate] = useState("");
+  const [historyOrders, setHistoryOrders] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [confirmedOrderNum, setConfirmedOrderNum] = useState(null); // shows after customer submits
+
+  // today's date string "YYYY-MM-DD" in local time
+  const todayStr = new Date().toLocaleDateString('en-CA');
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -212,10 +225,10 @@ export default function App() {
     return () => { unsubMenu(); unsubSettings(); };
   }, [user]);
 
-  // Orders listener — only runs when owner is logged in
+  // Orders listener — live feed for TODAY only
   useEffect(() => {
     if (!isUnlocked) { setOrders([]); return; }
-    const q = query(getOrdersCollection(), orderBy("createdAt", "desc"));
+    const q = query(getOrdersCollection(getDateStr()), orderBy("createdAt", "desc"));
     const unsub = onSnapshot(q,
       (snap) => {
         const incoming = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -376,14 +389,28 @@ export default function App() {
     }
   }, [cart, isCheckoutOpen]);
 
-  const updateOrderStatus = async (orderId, status) => {
+  const updateOrderStatus = async (orderId, status, dateStr) => {
     try {
-      await updateDoc(doc(db, 'artifacts', appId, 'private', 'data', 'orders', orderId), { status });
+      const d = dateStr || getDateStr();
+      await updateDoc(doc(db, 'artifacts', appId, 'private', 'data', 'orders', d, 'items', orderId), { status });
     } catch (e) { console.error(e); }
   };
 
   const saveOrderToFirebase = async () => {
-    await addDoc(getOrdersCollection(), {
+    const d = getDateStr();
+    const counterRef = getOrderCounterDoc(d);
+    const ordersCol = getOrdersCollection(d);
+
+    // Atomically get+increment the daily order counter
+    let orderNumber = 1;
+    await runTransaction(db, async (tx) => {
+      const counterSnap = await tx.get(counterRef);
+      orderNumber = counterSnap.exists() ? (counterSnap.data().count || 0) + 1 : 1;
+      tx.set(counterRef, { count: orderNumber }, { merge: true });
+    });
+
+    await addDoc(ordersCol, {
+      orderNumber,
       customerName,
       customerPhone,
       address,
@@ -395,16 +422,34 @@ export default function App() {
       deliveryFee,
       grandTotal: orderGrandTotal,
       status: "pending",
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      dateStr: d
     });
+
+    return orderNumber;
   };
 
-  const clearAfterOrder = () => {
+  const loadHistoryOrders = async (dateStr) => {
+    setHistoryLoading(true);
+    setHistoryOrders([]);
+    try {
+      const q = query(getOrdersCollection(dateStr), orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
+      setHistoryOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (e) {
+      console.error(e);
+      setHistoryOrders([]);
+    }
+    setHistoryLoading(false);
+  };
+
+  const clearAfterOrder = (orderNum) => {
     setCart({});
     setIsCheckoutOpen(false);
     setCustomerName("");
     setCustomerPhone("");
     setAddress("");
+    if (orderNum) setConfirmedOrderNum(orderNum);
   };
 
   const sendWhatsApp = async () => {
@@ -415,16 +460,18 @@ export default function App() {
     const feeLine = deliveryFee > 0
       ? `\nمجموع الأصناف: ${cartTotal.toLocaleString()} د.ع\nرسوم التوصيل: ${deliveryFee.toLocaleString()} د.ع\nالإجمالي: ${orderGrandTotal.toLocaleString()} د.ع`
       : `\nالمجموع: ${cartTotal.toLocaleString()} د.ع`;
-    const text = `طلب جديد: ${settings.restaurantNameAr}\n\nالاسم: ${customerName}\nالهاتف: ${customerPhone}\nالعنوان: ${address}\n\nالأصناف:\n${itemsStr}${feeLine}`;
-    try { await saveOrderToFirebase(); } catch (e) { console.error(e); }
+    let orderNum = null;
+    try { orderNum = await saveOrderToFirebase(); } catch (e) { console.error(e); }
+    const numLine = orderNum ? `\nرقم الطلب: #${orderNum}\n` : '';
+    const text = `طلب جديد 🍔${numLine}\nالاسم: ${customerName}\nالهاتف: ${customerPhone}\nالعنوان: ${address}\n\nالأصناف:\n${itemsStr}${feeLine}`;
     window.open(`https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(text)}`);
-    clearAfterOrder();
+    clearAfterOrder(orderNum);
   };
 
   const sendDashboardOnly = async () => {
     try {
-      await saveOrderToFirebase();
-      clearAfterOrder();
+      const orderNum = await saveOrderToFirebase();
+      clearAfterOrder(orderNum);
     } catch (e) {
       console.error(e);
       alert("فشل إرسال الطلب، تحقق من الإنترنت وأعد المحاولة.");
@@ -467,19 +514,23 @@ export default function App() {
 
             {/* TOP BAR — tabs + logout */}
             <div className="flex items-center justify-between gap-3">
-              <div className="flex bg-black/80 backdrop-blur-md p-1 rounded-2xl gap-1">
+              <div className="flex bg-black/80 backdrop-blur-md p-1 rounded-2xl gap-1 flex-wrap">
                 <button onClick={() => setAdminTab("orders")}
-                  className={`relative px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-2 ${adminTab === 'orders' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                  className={`relative px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-2 ${adminTab === 'orders' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
                   style={adminTab === 'orders' ? { backgroundColor: settings.primaryColor } : {}}>
-                  الطلبات
+                  اليوم
                   {orders.filter(o => o.status === 'pending').length > 0 && (
                     <span className="bg-red-500 text-white text-[9px] font-black rounded-full w-5 h-5 flex items-center justify-center animate-pulse shrink-0">
                       {orders.filter(o => o.status === 'pending').length}
                     </span>
                   )}
                 </button>
+                <button onClick={() => { setAdminTab("history"); setHistoryDate(""); setHistoryOrders([]); }}
+                  className={`px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all ${adminTab === 'history' ? 'bg-white text-black shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+                  السجل 📅
+                </button>
                 <button onClick={() => setAdminTab("menu")}
-                  className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all ${adminTab === 'menu' ? 'bg-white text-black shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+                  className={`px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all ${adminTab === 'menu' ? 'bg-white text-black shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                   الإدارة
                 </button>
               </div>
@@ -492,8 +543,23 @@ export default function App() {
             {/* ── ORDERS TAB ── */}
             {adminTab === "orders" && (
               <div className="space-y-4">
+
+                {/* Today's summary */}
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: "إجمالي الطلبات", value: orders.length, color: "text-white" },
+                    { label: "قيد التنفيذ", value: orders.filter(o => o.status !== 'done').length, color: "text-yellow-400" },
+                    { label: "مبيعات اليوم", value: orders.filter(o=>o.status==='done').reduce((s,o)=>s+(o.grandTotal||0),0).toLocaleString() + " د.ع", color: "text-green-400" },
+                  ].map(stat => (
+                    <div key={stat.label} className="bg-slate-900 rounded-2xl p-4 border border-white/5 text-center">
+                      <p className={`font-black text-lg leading-tight ${stat.color}`}>{stat.value}</p>
+                      <p className="text-white/30 text-[9px] font-bold mt-1">{stat.label}</p>
+                    </div>
+                  ))}
+                </div>
+
                 <div className="flex items-center justify-between">
-                  <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em]">الطلبات الواردة</h3>
+                  <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em]">طلبات اليوم — {todayStr}</h3>
                   <span className="text-white/30 text-[10px] font-black">{orders.length} طلب</span>
                 </div>
 
@@ -516,6 +582,36 @@ export default function App() {
                   const time = order.createdAt
                     ? new Date(order.createdAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })
                     : '';
+
+                  const printOrder = () => {
+                    const win = window.open('', '_blank', 'width=320,height=500');
+                    win.document.write(`
+                      <html><head><meta charset="utf-8"/>
+                      <style>
+                        body{font-family:sans-serif;padding:16px;direction:rtl;font-size:13px;max-width:300px}
+                        h1{font-size:22px;font-weight:900;margin:0 0 2px}
+                        .num{font-size:48px;font-weight:900;line-height:1;margin:4px 0 10px}
+                        .row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dotted #ccc}
+                        .total{font-weight:900;font-size:16px;margin-top:8px}
+                        .meta{color:#666;font-size:11px;margin-top:4px}
+                        hr{border:none;border-top:2px dashed #333;margin:10px 0}
+                      </style></head><body>
+                      <h1>${settings.restaurantName}</h1>
+                      <div class="meta">${todayStr} — ${time}</div>
+                      <div class="num">#${order.orderNumber || '—'}</div>
+                      <div class="meta" style="font-weight:700">${order.customerName} — ${order.customerPhone}</div>
+                      <div class="meta">📍 ${order.address}</div>
+                      <hr/>
+                      ${(order.items||[]).map(it=>`<div class="row"><span>${it.name}</span><span>×${it.qty} — ${((it.price||0)*it.qty).toLocaleString()} د.ع</span></div>`).join('')}
+                      ${order.deliveryFee>0?`<div class="row"><span>توصيل</span><span>${order.deliveryFee.toLocaleString()} د.ع</span></div>`:''}
+                      <div class="row total"><span>الإجمالي</span><span>${(order.grandTotal||0).toLocaleString()} د.ع</span></div>
+                      <hr/>
+                      <div class="meta" style="text-align:center;margin-top:8px">شكراً لطلبك 🍔</div>
+                      <script>window.onload=()=>{window.print();window.close();}<\/script>
+                      </body></html>`);
+                    win.document.close();
+                  };
+
                   return (
                     <div key={order.id}
                       className={`bg-slate-900 rounded-[2rem] p-6 border transition-all ${
@@ -523,21 +619,30 @@ export default function App() {
                         order.status === 'done'     ? 'border-white/5 opacity-50' :
                                                       'border-white/10'}`}>
 
-                      {/* Header row */}
+                      {/* Header row — order number prominent */}
                       <div className="flex justify-between items-start gap-3 mb-4">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <span className={`${st.bg} text-white text-[9px] font-black px-3 py-1 rounded-full`}>{st.label}</span>
-                            <span className="text-white/30 text-[10px] font-bold">{time}</span>
+                        <div className="flex items-start gap-3">
+                          {/* Big order number */}
+                          <div className="shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl text-white" style={{ backgroundColor: settings.primaryColor }}>
+                            #{order.orderNumber || '?'}
                           </div>
-                          <p className="text-white font-black text-lg leading-tight">{order.customerName}</p>
-                          <p className="text-white/50 text-[11px] font-bold mt-0.5 tabular-nums" dir="ltr">{order.customerPhone}</p>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <span className={`${st.bg} text-white text-[9px] font-black px-3 py-1 rounded-full`}>{st.label}</span>
+                              <span className="text-white/30 text-[10px] font-bold">{time}</span>
+                            </div>
+                            <p className="text-white font-black text-base leading-tight">{order.customerName}</p>
+                            <p className="text-white/50 text-[11px] font-bold mt-0.5 tabular-nums" dir="ltr">{order.customerPhone}</p>
+                          </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-[10px] text-white/30 font-bold mb-0.5">الإجمالي</p>
+                        <div className="text-right shrink-0 flex flex-col items-end gap-2">
                           <p className="text-2xl font-black leading-none" style={{ color: settings.primaryColor }}>
                             {(order.grandTotal || 0).toLocaleString()} <span className="text-[10px]">د.ع</span>
                           </p>
+                          <button onClick={printOrder}
+                            className="text-[10px] font-black text-white/40 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1">
+                            🖨️ طباعة
+                          </button>
                         </div>
                       </div>
 
@@ -569,7 +674,7 @@ export default function App() {
                       {/* Action buttons */}
                       <div className="flex gap-2">
                         {st.next && (
-                          <button onClick={() => updateOrderStatus(order.id, st.next)}
+                          <button onClick={() => updateOrderStatus(order.id, st.next, todayStr)}
                             className="flex-1 py-3 rounded-2xl text-white font-black text-[11px] uppercase tracking-wide transition-all active:scale-95 shadow-lg"
                             style={{ backgroundColor: settings.primaryColor }}>
                             {st.nextLabel}
@@ -584,6 +689,98 @@ export default function App() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* ── HISTORY TAB ── */}
+            {adminTab === "history" && (
+              <div className="space-y-4">
+                <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em]">سجل الطلبات السابقة 📅</h3>
+
+                {/* Date picker */}
+                <div className="bg-slate-900 rounded-[2rem] p-6 border border-white/5">
+                  <p className="text-white/50 text-[11px] font-bold mb-3">اختر تاريخاً لعرض طلباته</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      max={todayStr}
+                      value={historyDate}
+                      onChange={e => {
+                        setHistoryDate(e.target.value);
+                        if (e.target.value) loadHistoryOrders(e.target.value);
+                      }}
+                      className="flex-1 bg-black/50 border border-white/10 p-4 rounded-xl text-white text-sm font-bold outline-none focus:border-orange-500"
+                    />
+                    {historyDate && (
+                      <button onClick={() => { setHistoryDate(""); setHistoryOrders([]); }}
+                        className="px-4 rounded-xl bg-white/5 text-white/40 hover:text-white font-black text-sm transition-all">
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {historyLoading && (
+                  <div className="text-center py-10">
+                    <div className="text-3xl animate-pulse">⏳</div>
+                    <p className="text-white/30 text-xs font-bold mt-2">جارٍ التحميل...</p>
+                  </div>
+                )}
+
+                {!historyLoading && historyDate && historyOrders.length === 0 && (
+                  <div className="bg-slate-900 rounded-[2rem] p-12 text-center border border-white/5">
+                    <div className="text-4xl mb-3">🗓️</div>
+                    <p className="text-white/40 font-black text-sm">لا توجد طلبات في هذا اليوم</p>
+                  </div>
+                )}
+
+                {!historyLoading && historyOrders.length > 0 && (
+                  <>
+                    {/* History summary */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: "عدد الطلبات",   value: historyOrders.length },
+                        { label: "مكتملة",         value: historyOrders.filter(o=>o.status==='done').length },
+                        { label: "إجمالي المبيعات", value: historyOrders.reduce((s,o)=>s+(o.grandTotal||0),0).toLocaleString() + " د.ع" },
+                      ].map(s => (
+                        <div key={s.label} className="bg-slate-900 rounded-2xl p-4 border border-white/5 text-center">
+                          <p className="text-white font-black text-lg leading-tight">{s.value}</p>
+                          <p className="text-white/30 text-[9px] font-bold mt-1">{s.label}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* History order cards (read-only) */}
+                    {historyOrders.map(order => {
+                      const statusLabels = { pending:"جديد 🔔", preparing:"قيد التحضير 🍳", ready:"جاهز 🛵", done:"مكتمل ✅" };
+                      const time = order.createdAt ? new Date(order.createdAt).toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'}) : '';
+                      return (
+                        <div key={order.id} className={`bg-slate-900 rounded-[2rem] p-5 border border-white/5 ${order.status==='done'?'opacity-60':''}`}>
+                          <div className="flex justify-between items-start gap-3 mb-3">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="bg-slate-700 text-white/60 text-[9px] font-black px-2.5 py-1 rounded-full">{statusLabels[order.status]||order.status}</span>
+                                <span className="text-white/30 text-[10px] font-bold">{time}</span>
+                              </div>
+                              <p className="text-white font-black">{order.customerName}</p>
+                              <p className="text-white/40 text-[11px] font-bold" dir="ltr">{order.customerPhone}</p>
+                            </div>
+                            <p className="text-lg font-black shrink-0" style={{color:settings.primaryColor}}>{(order.grandTotal||0).toLocaleString()} <span className="text-[10px]">د.ع</span></p>
+                          </div>
+                          <div className="bg-black/30 rounded-xl p-3 space-y-1">
+                            {(order.items||[]).map((it,i)=>(
+                              <div key={i} className="flex justify-between text-[11px]">
+                                <span className="text-white/70 font-bold">{it.name}</span>
+                                <span className="text-white/40 font-black">×{it.qty}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-white/30 text-[10px] font-bold mt-2 flex items-center gap-1">📍 {order.address}</p>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
               </div>
             )}
 
@@ -1048,7 +1245,6 @@ export default function App() {
                       تأكيد الطلب ✅
                     </button>
                   );
-                  // both
                   return (
                     <div className="space-y-3">
                       <button disabled={disabled} onClick={sendWhatsApp} className="w-full py-5 bg-[#25D366] text-white font-black rounded-2xl text-sm shadow-xl disabled:opacity-30 disabled:grayscale transition-all">
@@ -1060,6 +1256,23 @@ export default function App() {
                     </div>
                   );
                 })()}
+              </div>
+            </div>
+          )}
+
+          {/* ORDER CONFIRMED POPUP */}
+          {confirmedOrderNum && (
+            <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-6">
+              <div className="bg-white rounded-[3rem] p-10 text-center max-w-xs w-full shadow-2xl animate-slide-up" dir="rtl">
+                <div className="text-6xl mb-4">✅</div>
+                <p className="text-slate-400 text-[11px] font-black uppercase tracking-widest mb-2">تم استلام طلبك</p>
+                <p className="text-8xl font-black tracking-tighter leading-none mb-1" style={{ color: settings.primaryColor }}>#{confirmedOrderNum}</p>
+                <p className="text-slate-400 text-xs font-bold mt-1 mb-8">احتفظ برقم طلبك</p>
+                <button onClick={() => setConfirmedOrderNum(null)}
+                  className="w-full py-4 text-white font-black rounded-2xl text-sm active:scale-95 transition-all"
+                  style={{ backgroundColor: settings.primaryColor }}>
+                  حسناً 👍
+                </button>
               </div>
             </div>
           )}
