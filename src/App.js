@@ -143,6 +143,7 @@ export default function App() {
   const [orderError, setOrderError] = useState(null);   // null | "offline" | "failed"
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [menuFilter, setMenuFilter] = useState("الكل");
+  const [autoPrintEnabled, setAutoPrintEnabled] = useState(true);
 
   // today's date string "YYYY-MM-DD" in local time
   const todayStr = new Date().toLocaleDateString('en-CA');
@@ -235,11 +236,25 @@ export default function App() {
     const q = query(getOrdersCollection(getDateStr()), orderBy("createdAt", "desc"));
     const unsub = onSnapshot(q,
       (snap) => {
+        const now = Date.now();
         const incoming = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
         setOrders(prev => {
           const prevIds = new Set(prev.map(o => o.id));
-          const hasNew = incoming.some(o => !prevIds.has(o.id) && o.status === "pending");
+
+          // Detect brand-new pending orders with freshness check (last 20 seconds)
+          const freshNewOrders = incoming.filter(o => {
+            if (prevIds.has(o.id)) return false;
+            if (o.status !== "pending") return false;
+            if (!o.createdAt) return false;
+            const orderTime = new Date(o.createdAt).getTime();
+            return (now - orderTime) < 20000;
+          });
+
+          const hasNew = freshNewOrders.length > 0;
+
           if (hasNew && prev.length > 0) {
+            // Sound alert
             try {
               const ctx = new (window.AudioContext || window.webkitAudioContext)();
               [0, 0.18].forEach(t => {
@@ -253,14 +268,20 @@ export default function App() {
                 osc.stop(ctx.currentTime + t + 0.35);
               });
             } catch {}
+
+            // Silent auto-print (requires --kiosk-printing in Chrome shortcut)
+            if (autoPrintEnabled) {
+              try { window.print(); } catch {}
+            }
           }
+
           return incoming;
         });
       },
       (err) => console.error("Orders listener error:", err)
     );
     return () => unsub();
-  }, [isUnlocked]);
+  }, [isUnlocked, autoPrintEnabled]);
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
@@ -563,10 +584,24 @@ export default function App() {
                   الإدارة
                 </button>
               </div>
-              <button type="button" onClick={handleOwnerLogout}
-                className="bg-black text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-white hover:text-black border border-white/20 transition-colors shrink-0">
-                خروج
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Silent Printing Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setAutoPrintEnabled(p => !p)}
+                  title={autoPrintEnabled ? "إيقاف الطباعة التلقائية" : "تفعيل الطباعة التلقائية"}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wide border transition-all ${
+                    autoPrintEnabled
+                      ? 'bg-green-500/20 border-green-500/40 text-green-400'
+                      : 'bg-slate-700/40 border-white/10 text-slate-400'
+                  }`}>
+                  🖨️ {autoPrintEnabled ? 'تلقائي' : 'يدوي'}
+                </button>
+                <button type="button" onClick={handleOwnerLogout}
+                  className="bg-black text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-white hover:text-black border border-white/20 transition-colors">
+                  خروج
+                </button>
+              </div>
             </div>
 
             {/* ── ORDERS TAB ── */}
@@ -644,7 +679,7 @@ export default function App() {
 
                   return (
                     <div key={order.id}
-                      className={`bg-slate-900 rounded-[2rem] p-6 border transition-all ${
+                      className={`order-card bg-slate-900 rounded-[2rem] p-6 border transition-all ${
                         order.status === 'pending'   ? 'border-yellow-500/50 shadow-yellow-500/10 shadow-2xl' :
                         order.status === 'done'      ? 'border-white/5 opacity-50' :
                         order.status === 'cancelled' ? 'border-red-500/20 opacity-40' :
@@ -1467,6 +1502,52 @@ export default function App() {
           50% { transform: rotate(-10deg) translate(4px, -3px); }
         }
         .deal-bg-img { animation: dealBgDrift 8s ease-in-out infinite; }
+
+        /* ── AUTO-PRINT RECEIPT STYLES ── */
+        @media print {
+          /* Hide everything except order cards */
+          body > * { display: none !important; }
+          .owner-panel { display: block !important; background: #fff !important; padding: 0 !important; }
+          /* Hide sidebar, nav, tabs, buttons, history, menu tabs */
+          nav, .no-scrollbar, [class*="backdrop-blur"],
+          button, a, input, select, textarea,
+          [class*="grid-cols-3"],
+          [class*="animate-pulse"],
+          [class*="bg-slate-900"]:not(.order-card) { display: none !important; }
+          /* Show only order cards */
+          .order-card {
+            display: block !important;
+            page-break-inside: avoid;
+            page-break-after: always;
+            border: none !important;
+            box-shadow: none !important;
+            background: #fff !important;
+            color: #000 !important;
+            padding: 12px !important;
+            font-family: monospace !important;
+            font-size: 12px !important;
+            max-width: 280px !important;
+            margin: 0 auto !important;
+          }
+          .order-card * { color: #000 !important; background: transparent !important; }
+          /* Dashed separator between order sections */
+          .order-card::before {
+            content: '- - - - - - - - - - - - - - - - - -';
+            display: block;
+            text-align: center;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            font-size: 11px;
+          }
+          .order-card::after {
+            content: '- - - - - - - - - - - - - - - - - -';
+            display: block;
+            text-align: center;
+            letter-spacing: 1px;
+            margin-top: 8px;
+            font-size: 11px;
+          }
+        }
       `}} />
     </div>
   );
