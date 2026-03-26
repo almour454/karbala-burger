@@ -726,6 +726,14 @@ export default function App() {
                             ❌ إلغاء
                           </button>
                         )}
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`هل تريد حذف الطلب #${order.orderNumber} للزبون ${order.customerName} نهائياً من النظام؟\n\nلن يظهر هذا الطلب في السجل بعد الحذف.`))
+                              deleteDoc(doc(db, 'artifacts', appId, 'private', 'data', 'orders', todayStr, 'items', order.id)).catch(console.error);
+                          }}
+                          className="px-4 py-3 rounded-2xl bg-slate-500/10 text-slate-400 hover:bg-slate-700 hover:text-white font-black text-[11px] transition-all shrink-0">
+                          🗑️
+                        </button>
                       </div>
                     </div>
                   );
