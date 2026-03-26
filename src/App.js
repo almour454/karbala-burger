@@ -142,6 +142,7 @@ export default function App() {
   const [confirmedOrderNum, setConfirmedOrderNum] = useState(null);
   const [orderError, setOrderError] = useState(null);   // null | "offline" | "failed"
   const [orderSubmitting, setOrderSubmitting] = useState(false);
+  const [menuFilter, setMenuFilter] = useState("الكل");
 
   // today's date string "YYYY-MM-DD" in local time
   const todayStr = new Date().toLocaleDateString('en-CA');
@@ -538,7 +539,7 @@ export default function App() {
             </form>
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto p-6 pb-40 space-y-6" dir="rtl">
+          <div className="owner-panel max-w-4xl mx-auto p-6 pb-40 space-y-6" dir="rtl">
 
             {/* TOP BAR — tabs + logout */}
             <div className="flex items-center justify-between gap-3">
@@ -605,6 +606,7 @@ export default function App() {
                     preparing: { label: "قيد التحضير 🍳",     bg: "bg-blue-500",   next: "ready",     nextLabel: "جاهز للتوصيل 🛵" },
                     ready:     { label: "جاهز للتوصيل 🛵",    bg: "bg-green-500",  next: "done",      nextLabel: "تم التسليم ✅" },
                     done:      { label: "مكتمل ✅",            bg: "bg-slate-600",  next: null,        nextLabel: null },
+                    cancelled: { label: "ملغى ❌",             bg: "bg-red-600",    next: null,        nextLabel: null },
                   };
                   const st = statusMap[order.status] || statusMap.pending;
                   const time = order.createdAt
@@ -643,9 +645,10 @@ export default function App() {
                   return (
                     <div key={order.id}
                       className={`bg-slate-900 rounded-[2rem] p-6 border transition-all ${
-                        order.status === 'pending'  ? 'border-yellow-500/50 shadow-yellow-500/10 shadow-2xl' :
-                        order.status === 'done'     ? 'border-white/5 opacity-50' :
-                                                      'border-white/10'}`}>
+                        order.status === 'pending'   ? 'border-yellow-500/50 shadow-yellow-500/10 shadow-2xl' :
+                        order.status === 'done'      ? 'border-white/5 opacity-50' :
+                        order.status === 'cancelled' ? 'border-red-500/20 opacity-40' :
+                                                       'border-white/10'}`}>
 
                       {/* Header row — order number prominent */}
                       <div className="flex justify-between items-start gap-3 mb-4">
@@ -700,7 +703,7 @@ export default function App() {
                       </div>
 
                       {/* Action buttons */}
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                         {st.next && (
                           <button onClick={() => updateOrderStatus(order.id, st.next, todayStr)}
                             className="flex-1 py-3 rounded-2xl text-white font-black text-[11px] uppercase tracking-wide transition-all active:scale-95 shadow-lg"
@@ -710,9 +713,19 @@ export default function App() {
                         )}
                         <a href={`https://wa.me/${digitsOnly(order.customerPhone)}?text=${encodeURIComponent(`مرحباً ${order.customerName}، طلبك الآن: ${st.label}`)}`}
                           target="_blank" rel="noreferrer"
-                          className="px-5 py-3 rounded-2xl bg-[#25D366]/20 text-[#25D366] font-black text-[11px] flex items-center justify-center hover:bg-[#25D366]/30 transition-all shrink-0">
+                          className="px-4 py-3 rounded-2xl bg-[#25D366]/20 text-[#25D366] font-black text-[11px] flex items-center justify-center hover:bg-[#25D366]/30 transition-all shrink-0">
                           💬
                         </a>
+                        {order.status !== 'done' && (
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`هل تريد إلغاء الطلب #${order.orderNumber} للزبون ${order.customerName}؟\n\nلا يمكن التراجع عن هذا الإجراء.`))
+                                updateOrderStatus(order.id, 'cancelled', todayStr);
+                            }}
+                            className="px-4 py-3 rounded-2xl bg-red-500/15 text-red-400 hover:bg-red-500 hover:text-white font-black text-[11px] transition-all shrink-0">
+                            ❌ إلغاء
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -947,13 +960,27 @@ export default function App() {
 
             {/* VISUAL LIST */}
             <section className="bg-slate-900 rounded-[2.5rem] p-8 border border-white/10 shadow-xl">
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex justify-between items-center mb-4">
                 <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em]">قائمة الوجبات الحالية</h3>
                 <span className="bg-white/10 px-3 py-1 rounded-full text-white text-[10px] font-black">{menuItems.length} صنف</span>
               </div>
+
+              {/* Category filter pills */}
+              <div className="flex flex-wrap gap-2 mb-5">
+                {["الكل", ...categories].map(cat => (
+                  <button key={cat} onClick={() => setMenuFilter(cat)}
+                    className={`px-4 py-1.5 rounded-xl text-[11px] font-black transition-all border ${menuFilter === cat ? 'text-white border-transparent' : 'bg-white/5 text-white/50 border-white/10 hover:border-white/20'}`}
+                    style={menuFilter === cat ? { backgroundColor: settings.primaryColor } : {}}>
+                    {cat}
+                    <span className="ml-1 opacity-60 text-[9px]">
+                      {cat === "الكل" ? menuItems.length : menuItems.filter(i => i.category === cat).length}
+                    </span>
+                  </button>
+                ))}
+              </div>
               
               <div className="grid grid-cols-1 gap-3">
-                {menuItems.map(item => (
+                {menuItems.filter(item => menuFilter === "الكل" || item.category === menuFilter).map(item => (
                     <div key={item.id} className={`bg-black/40 p-3 rounded-2xl border border-white/5 flex items-center justify-between group hover:border-white/20 transition-all ${item.hidden ? 'opacity-40' : ''}`}>
                       <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-800 shadow-inner relative">
@@ -978,7 +1005,7 @@ export default function App() {
                       <div className="flex gap-2">
                         <button onClick={() => handleToggleVisibility(item)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${item.hidden ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500 hover:text-white' : 'bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white'}`}>{item.hidden ? '🙈 مخفي' : '👁 ظاهر'}</button>
                         <button onClick={() => { setNewItem({...item}); document.getElementById('item-form').scrollIntoView({ behavior: 'smooth' }); }} className="text-white/40 hover:text-white p-3 text-[10px] font-black uppercase">تعديل</button>
-                        <button onClick={() => { if(window.confirm(`حذف ${item.name}؟`)) handleDeleteItem(item.id); }} className="bg-red-500/10 text-red-500 px-4 py-2 rounded-xl hover:bg-red-500 hover:text-white transition-all text-[10px] font-black uppercase">حذف</button>
+                        <button onClick={() => { if(window.confirm(`هل تريد حذف "${item.name}" من المنيو؟\n\nلا يمكن التراجع عن هذا الإجراء.`)) handleDeleteItem(item.id); }} className="bg-red-500/10 text-red-500 px-4 py-2 rounded-xl hover:bg-red-500 hover:text-white transition-all text-[10px] font-black uppercase">حذف</button>
                       </div>
                     </div>
                 ))}
@@ -1330,6 +1357,32 @@ export default function App() {
       <style dangerouslySetInnerHTML={{ __html: `
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* ── OWNER PANEL LIGHT THEME ── */
+        .owner-panel { background: #f8fafc; border-radius: 0; min-height: 100vh; padding-bottom: 10rem; }
+        .owner-panel section,
+        .owner-panel .order-card { background: #ffffff !important; border-color: #e2e8f0 !important; box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important; }
+        .owner-panel [class*="bg-slate-900"] { background: #ffffff !important; }
+        .owner-panel [class*="bg-black/40"],
+        .owner-panel [class*="bg-black/30"],
+        .owner-panel [class*="bg-black/20"],
+        .owner-panel [class*="bg-black/50"] { background: #f1f5f9 !important; }
+        .owner-panel input, .owner-panel textarea, .owner-panel select { background: #f8fafc !important; border-color: #cbd5e1 !important; color: #0f172a !important; }
+        .owner-panel input::placeholder, .owner-panel textarea::placeholder { color: #94a3b8 !important; }
+        .owner-panel [class*="text-white"]:not([class*="bg-"]):not(button):not(a):not(span[class*="bg-"]) { color: #1e293b !important; }
+        .owner-panel [class*="text-white/30"] { color: #94a3b8 !important; }
+        .owner-panel [class*="text-white/40"] { color: #64748b !important; }
+        .owner-panel [class*="text-white/50"] { color: #475569 !important; }
+        .owner-panel [class*="text-white/60"] { color: #334155 !important; }
+        .owner-panel [class*="border-white/5"],
+        .owner-panel [class*="border-white/10"],
+        .owner-panel [class*="border-white/15"],
+        .owner-panel [class*="border-white/20"] { border-color: #e2e8f0 !important; }
+        .owner-panel [class*="bg-white/5"] { background: #f1f5f9 !important; }
+        .owner-panel [class*="bg-white/10"] { background: #e2e8f0 !important; }
+        .owner-panel [class*="bg-black/80"],
+        .owner-panel [class*="bg-black/90"] { background: #1e293b !important; }
+        .owner-panel h3[class*="text-orange"] { color: #ea580c !important; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.8s ease-out forwards; }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
