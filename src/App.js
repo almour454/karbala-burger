@@ -555,54 +555,43 @@ export default function App() {
                   const hasSocial = settings.facebookUrl || settings.instagramUrl || settings.tiktokUrl;
                   if (!hasSocial && phones.length === 0) return null;
                   return (
-                    <div className="mt-2 flex flex-col items-center gap-3 w-full max-w-2xl mx-auto px-2">
-                      {hasSocial && (
-                      <div className="flex flex-wrap items-center justify-center gap-2">
-                        {settings.facebookUrl && (
-                          <a href={settings.facebookUrl} target="_blank" rel="noreferrer" aria-label="Facebook" title="Facebook" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#1877F2] hover:border-[#1877F2]/30 hover:shadow-md transition-all flex items-center justify-center">
-                            <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 fill-current">
-                              <path d="M13.5 8.5V6.8c0-.8.5-1.1 1.2-1.1H16V3h-2.1C11.6 3 10.5 4.4 10.5 6.2v2.3H9v2.8h1.5V21h3V11.3h2.1l.3-2.8h-2.4z" />
-                            </svg>
-                          </a>
-                        )}
-                        {settings.instagramUrl && (
-                          <a href={settings.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram" title="Instagram" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#E1306C] hover:border-[#E1306C]/30 hover:shadow-md transition-all flex items-center justify-center">
-                            <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 stroke-current fill-none" strokeWidth="2">
-                              <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
-                              <circle cx="12" cy="12" r="4" />
-                              <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
-                            </svg>
-                          </a>
-                        )}
-                        {settings.tiktokUrl && (
-                          <a href={settings.tiktokUrl} target="_blank" rel="noreferrer" aria-label="TikTok" title="TikTok" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#00F2EA] hover:border-[#00F2EA]/30 hover:shadow-md transition-all flex items-center justify-center">
-                            <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 fill-current">
-                              <path d="M14.8 3h2.6c.2 1.5 1.3 2.8 2.6 3.3v2.7c-1.3 0-2.6-.4-3.7-1.1v6.3c0 3-2.4 5.4-5.4 5.4a5.4 5.4 0 1 1 0-10.8c.3 0 .6 0 .9.1v2.7a2.8 2.8 0 1 0 1.9 2.7V3z" />
-                            </svg>
-                          </a>
-                        )}
-                      </div>
+                    <div className="mt-2 flex flex-wrap items-center justify-center gap-2 max-w-sm mx-auto px-2">
+                      {settings.facebookUrl && (
+                        <a href={settings.facebookUrl} target="_blank" rel="noreferrer" aria-label="Facebook" title="Facebook" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#1877F2] hover:border-[#1877F2]/30 hover:shadow-md transition-all flex items-center justify-center shrink-0">
+                          <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                            <path d="M13.5 8.5V6.8c0-.8.5-1.1 1.2-1.1H16V3h-2.1C11.6 3 10.5 4.4 10.5 6.2v2.3H9v2.8h1.5V21h3V11.3h2.1l.3-2.8h-2.4z" />
+                          </svg>
+                        </a>
                       )}
-                      {phones.length > 0 && (
-                        <div className={`w-full ${hasSocial ? "border-t border-black/5 pt-3" : "pt-1"}`}>
-                          <span className="block text-center text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">اتصل بنا</span>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
-                            {phones.map((num, idx) => (
-                              <a
-                                key={`contact-phone-${idx}`}
-                                href={toTelHref(num)}
-                                className="inline-flex items-center justify-center gap-2 px-3 py-3 rounded-2xl bg-white border border-black/10 text-slate-800 text-[11px] sm:text-[10px] font-black shadow-sm hover:shadow-md hover:border-slate-300 transition-all min-h-[44px]"
-                                dir="ltr"
-                              >
-                                <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 shrink-0 opacity-80" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                </svg>
-                                <span className="tabular-nums tracking-tight break-all text-center">{digitsOnly(num) || num}</span>
-                              </a>
-                            ))}
-                          </div>
-                        </div>
+                      {settings.instagramUrl && (
+                        <a href={settings.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram" title="Instagram" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#E1306C] hover:border-[#E1306C]/30 hover:shadow-md transition-all flex items-center justify-center shrink-0">
+                          <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 stroke-current fill-none" strokeWidth="2">
+                            <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
+                            <circle cx="12" cy="12" r="4" />
+                            <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+                          </svg>
+                        </a>
                       )}
+                      {settings.tiktokUrl && (
+                        <a href={settings.tiktokUrl} target="_blank" rel="noreferrer" aria-label="TikTok" title="TikTok" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#00F2EA] hover:border-[#00F2EA]/30 hover:shadow-md transition-all flex items-center justify-center shrink-0">
+                          <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                            <path d="M14.8 3h2.6c.2 1.5 1.3 2.8 2.6 3.3v2.7c-1.3 0-2.6-.4-3.7-1.1v6.3c0 3-2.4 5.4-5.4 5.4a5.4 5.4 0 1 1 0-10.8c.3 0 .6 0 .9.1v2.7a2.8 2.8 0 1 0 1.9 2.7V3z" />
+                          </svg>
+                        </a>
+                      )}
+                      {phones.map((num, idx) => (
+                        <a
+                          key={`contact-phone-${idx}`}
+                          href={toTelHref(num)}
+                          dir="ltr"
+                          className="inline-flex items-center gap-1.5 h-10 px-3 rounded-full bg-white border border-black/10 text-slate-700 hover:border-slate-300 hover:shadow-md transition-all shrink-0"
+                        >
+                          <svg aria-hidden="true" viewBox="0 0 24 24" className="w-3 h-3 shrink-0 opacity-60" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                          </svg>
+                          <span className="text-[11px] font-black tabular-nums tracking-tight text-slate-800">{digitsOnly(num) || num}</span>
+                        </a>
+                      ))}
                     </div>
                   );
                 })()}
