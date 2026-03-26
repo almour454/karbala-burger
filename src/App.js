@@ -6,7 +6,7 @@ import {
   onSnapshot, 
   doc, 
   getDoc,
-  setDoc, 
+  setDoc,
   addDoc,
   updateDoc,
   deleteDoc,
@@ -106,6 +106,7 @@ export default function App() {
     dealsSectionTitle: "عروض نارية 🔥",
     cartDeliveryNote: "رسوم التوصيل حسب المنطقة — لا تُضاف تلقائيًا للمجموع.",
     deliveryFee: 0,
+    orderMode: "both",
     contactPhone1: "",
     contactPhone2: "",
     contactPhone3: ""
@@ -211,30 +212,36 @@ export default function App() {
     return () => { unsubMenu(); unsubSettings(); };
   }, [user]);
 
+  // Orders listener — only runs when owner is logged in
   useEffect(() => {
-    if (!isUnlocked) return;
+    if (!isUnlocked) { setOrders([]); return; }
     const q = query(getOrdersCollection(), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(q, (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setOrders(prev => {
-        // play a beep if a brand-new "pending" order arrived
-        const prevIds = new Set(prev.map(o => o.id));
-        const hasNew = data.some(o => !prevIds.has(o.id) && o.status === "pending");
-        if (hasNew && prev.length > 0) {
-          try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain); gain.connect(ctx.destination);
-            osc.frequency.value = 880;
-            gain.gain.setValueAtTime(0.4, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
-            osc.start(); osc.stop(ctx.currentTime + 0.6);
-          } catch {}
-        }
-        return data;
-      });
-    });
+    const unsub = onSnapshot(q,
+      (snap) => {
+        const incoming = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setOrders(prev => {
+          const prevIds = new Set(prev.map(o => o.id));
+          const hasNew = incoming.some(o => !prevIds.has(o.id) && o.status === "pending");
+          if (hasNew && prev.length > 0) {
+            try {
+              const ctx = new (window.AudioContext || window.webkitAudioContext)();
+              [0, 0.18].forEach(t => {
+                const osc = ctx.createOscillator();
+                const g   = ctx.createGain();
+                osc.connect(g); g.connect(ctx.destination);
+                osc.frequency.value = 880;
+                g.gain.setValueAtTime(0.5, ctx.currentTime + t);
+                g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.35);
+                osc.start(ctx.currentTime + t);
+                osc.stop(ctx.currentTime + t + 0.35);
+              });
+            } catch {}
+          }
+          return incoming;
+        });
+      },
+      (err) => console.error("Orders listener error:", err)
+    );
     return () => unsub();
   }, [isUnlocked]);
 
@@ -375,6 +382,31 @@ export default function App() {
     } catch (e) { console.error(e); }
   };
 
+  const saveOrderToFirebase = async () => {
+    await addDoc(getOrdersCollection(), {
+      customerName,
+      customerPhone,
+      address,
+      items: Object.entries(cart).map(([id, qty]) => {
+        const it = menuItems.find(m => m.id === id);
+        return { id, name: it?.name || id, qty, price: it?.salePrice || it?.price || 0 };
+      }),
+      cartTotal,
+      deliveryFee,
+      grandTotal: orderGrandTotal,
+      status: "pending",
+      createdAt: new Date().toISOString()
+    });
+  };
+
+  const clearAfterOrder = () => {
+    setCart({});
+    setIsCheckoutOpen(false);
+    setCustomerName("");
+    setCustomerPhone("");
+    setAddress("");
+  };
+
   const sendWhatsApp = async () => {
     const itemsStr = Object.entries(cart).map(([id, q]) => {
       const it = menuItems.find(m=>m.id===id);
@@ -384,29 +416,19 @@ export default function App() {
       ? `\nمجموع الأصناف: ${cartTotal.toLocaleString()} د.ع\nرسوم التوصيل: ${deliveryFee.toLocaleString()} د.ع\nالإجمالي: ${orderGrandTotal.toLocaleString()} د.ع`
       : `\nالمجموع: ${cartTotal.toLocaleString()} د.ع`;
     const text = `طلب جديد: ${settings.restaurantNameAr}\n\nالاسم: ${customerName}\nالهاتف: ${customerPhone}\nالعنوان: ${address}\n\nالأصناف:\n${itemsStr}${feeLine}`;
-    // Save to Firebase first
-    try {
-      await addDoc(getOrdersCollection(), {
-        customerName,
-        customerPhone,
-        address,
-        items: Object.entries(cart).map(([id, qty]) => {
-          const it = menuItems.find(m => m.id === id);
-          return { id, name: it?.name || id, qty, price: it?.salePrice || it?.price || 0 };
-        }),
-        cartTotal,
-        deliveryFee,
-        grandTotal: orderGrandTotal,
-        status: "pending",
-        createdAt: new Date().toISOString()
-      });
-    } catch (e) { console.error("Order save failed", e); }
+    try { await saveOrderToFirebase(); } catch (e) { console.error(e); }
     window.open(`https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(text)}`);
-    setCart({});
-    setIsCheckoutOpen(false);
-    setCustomerName("");
-    setCustomerPhone("");
-    setAddress("");
+    clearAfterOrder();
+  };
+
+  const sendDashboardOnly = async () => {
+    try {
+      await saveOrderToFirebase();
+      clearAfterOrder();
+    } catch (e) {
+      console.error(e);
+      alert("فشل إرسال الطلب، تحقق من الإنترنت وأعد المحاولة.");
+    }
   };
 
   return (
@@ -441,68 +463,89 @@ export default function App() {
             </form>
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto p-6 pb-40 space-y-8" dir="rtl">
-            <div className="flex justify-between items-center">
-              {/* Tab switcher */}
-              <div className="flex bg-black/80 p-1 rounded-2xl gap-1">
-                <button onClick={() => setAdminTab("orders")} className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${adminTab === 'orders' ? 'text-white shadow-lg' : 'text-slate-400'}`} style={adminTab === 'orders' ? { backgroundColor: settings.primaryColor } : {}}>
+          <div className="max-w-4xl mx-auto p-6 pb-40 space-y-6" dir="rtl">
+
+            {/* TOP BAR — tabs + logout */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex bg-black/80 backdrop-blur-md p-1 rounded-2xl gap-1">
+                <button onClick={() => setAdminTab("orders")}
+                  className={`relative px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-2 ${adminTab === 'orders' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                  style={adminTab === 'orders' ? { backgroundColor: settings.primaryColor } : {}}>
                   الطلبات
                   {orders.filter(o => o.status === 'pending').length > 0 && (
-                    <span className="bg-red-500 text-white text-[9px] font-black rounded-full w-5 h-5 flex items-center justify-center animate-pulse">{orders.filter(o => o.status === 'pending').length}</span>
+                    <span className="bg-red-500 text-white text-[9px] font-black rounded-full w-5 h-5 flex items-center justify-center animate-pulse shrink-0">
+                      {orders.filter(o => o.status === 'pending').length}
+                    </span>
                   )}
                 </button>
-                <button onClick={() => setAdminTab("menu")} className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${adminTab === 'menu' ? 'bg-white text-black shadow-lg' : 'text-slate-400'}`}>الإدارة</button>
+                <button onClick={() => setAdminTab("menu")}
+                  className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all ${adminTab === 'menu' ? 'bg-white text-black shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+                  الإدارة
+                </button>
               </div>
-              <button type="button" onClick={handleOwnerLogout} className="bg-black text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-white hover:text-black border border-white/20 transition-colors">تسجيل خروج</button>
+              <button type="button" onClick={handleOwnerLogout}
+                className="bg-black text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-white hover:text-black border border-white/20 transition-colors shrink-0">
+                خروج
+              </button>
             </div>
 
-            {/* ORDERS TAB */}
+            {/* ── ORDERS TAB ── */}
             {adminTab === "orders" && (
-              <section className="space-y-4">
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em]">الطلبات الواردة</h3>
-                  <span className="text-white/40 text-[10px] font-black">{orders.length} طلب</span>
+                  <span className="text-white/30 text-[10px] font-black">{orders.length} طلب</span>
                 </div>
 
                 {orders.length === 0 && (
-                  <div className="bg-slate-900 rounded-[2rem] p-12 text-center border border-white/5">
+                  <div className="bg-slate-900 rounded-[2rem] p-14 text-center border border-white/5">
                     <div className="text-5xl mb-4">📭</div>
                     <p className="text-white/40 font-black text-sm">لا توجد طلبات بعد</p>
-                    <p className="text-white/20 text-[10px] font-bold mt-1">ستظهر هنا فور وصول أي طلب</p>
+                    <p className="text-white/20 text-[10px] font-bold mt-1">ستظهر هنا فور وصول أي طلب تلقائياً</p>
                   </div>
                 )}
 
                 {orders.map(order => {
                   const statusMap = {
-                    pending:    { label: "جديد 🔔",        color: "bg-yellow-500",  next: "preparing", nextLabel: "قيد التحضير 🍳" },
-                    preparing:  { label: "قيد التحضير 🍳", color: "bg-blue-500",    next: "ready",     nextLabel: "جاهز للتوصيل 🛵" },
-                    ready:      { label: "جاهز 🛵",        color: "bg-green-500",   next: "done",      nextLabel: "تم التسليم ✅" },
-                    done:       { label: "مكتمل ✅",       color: "bg-slate-600",   next: null,        nextLabel: null },
+                    pending:   { label: "جديد 🔔",            bg: "bg-yellow-500", next: "preparing", nextLabel: "قيد التحضير 🍳" },
+                    preparing: { label: "قيد التحضير 🍳",     bg: "bg-blue-500",   next: "ready",     nextLabel: "جاهز للتوصيل 🛵" },
+                    ready:     { label: "جاهز للتوصيل 🛵",    bg: "bg-green-500",  next: "done",      nextLabel: "تم التسليم ✅" },
+                    done:      { label: "مكتمل ✅",            bg: "bg-slate-600",  next: null,        nextLabel: null },
                   };
                   const st = statusMap[order.status] || statusMap.pending;
-                  const time = order.createdAt ? new Date(order.createdAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' }) : '';
+                  const time = order.createdAt
+                    ? new Date(order.createdAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })
+                    : '';
                   return (
-                    <div key={order.id} className={`bg-slate-900 rounded-[2rem] p-6 border transition-all ${order.status === 'pending' ? 'border-yellow-500/40 shadow-yellow-500/10 shadow-xl' : order.status === 'done' ? 'border-white/5 opacity-60' : 'border-white/10'}`}>
+                    <div key={order.id}
+                      className={`bg-slate-900 rounded-[2rem] p-6 border transition-all ${
+                        order.status === 'pending'  ? 'border-yellow-500/50 shadow-yellow-500/10 shadow-2xl' :
+                        order.status === 'done'     ? 'border-white/5 opacity-50' :
+                                                      'border-white/10'}`}>
+
+                      {/* Header row */}
                       <div className="flex justify-between items-start gap-3 mb-4">
                         <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`${st.color} text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase`}>{st.label}</span>
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className={`${st.bg} text-white text-[9px] font-black px-3 py-1 rounded-full`}>{st.label}</span>
                             <span className="text-white/30 text-[10px] font-bold">{time}</span>
                           </div>
                           <p className="text-white font-black text-lg leading-tight">{order.customerName}</p>
-                          <p className="text-white/50 text-[11px] font-bold mt-0.5" dir="ltr">{order.customerPhone}</p>
+                          <p className="text-white/50 text-[11px] font-bold mt-0.5 tabular-nums" dir="ltr">{order.customerPhone}</p>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-[10px] text-white/30 font-bold">الإجمالي</p>
-                          <p className="text-xl font-black" style={{ color: settings.primaryColor }}>{(order.grandTotal || 0).toLocaleString()} <span className="text-[10px]">د.ع</span></p>
+                          <p className="text-[10px] text-white/30 font-bold mb-0.5">الإجمالي</p>
+                          <p className="text-2xl font-black leading-none" style={{ color: settings.primaryColor }}>
+                            {(order.grandTotal || 0).toLocaleString()} <span className="text-[10px]">د.ع</span>
+                          </p>
                         </div>
                       </div>
 
-                      {/* Items */}
-                      <div className="bg-black/30 rounded-2xl p-4 mb-4 space-y-1">
+                      {/* Items list */}
+                      <div className="bg-black/30 rounded-2xl p-4 mb-3 space-y-1.5">
                         {(order.items || []).map((it, i) => (
-                          <div key={i} className="flex justify-between items-center text-sm">
-                            <span className="text-white font-bold">{it.name}</span>
+                          <div key={i} className="flex justify-between items-center">
+                            <span className="text-white text-sm font-bold">{it.name}</span>
                             <div className="flex items-center gap-3">
                               <span className="text-white/40 font-black text-[11px]">×{it.qty}</span>
                               <span className="text-white/60 font-black text-[11px]">{((it.price || 0) * it.qty).toLocaleString()} د.ع</span>
@@ -510,38 +553,43 @@ export default function App() {
                           </div>
                         ))}
                         {order.deliveryFee > 0 && (
-                          <div className="flex justify-between items-center text-sm border-t border-white/10 pt-2 mt-2">
-                            <span className="text-white/40 font-bold text-[11px]">رسوم التوصيل</span>
-                            <span className="text-white/40 font-black text-[11px]">{order.deliveryFee.toLocaleString()} د.ع</span>
+                          <div className="flex justify-between items-center border-t border-white/10 pt-2 mt-1">
+                            <span className="text-white/40 text-[11px] font-bold">رسوم التوصيل</span>
+                            <span className="text-white/40 text-[11px] font-black">{order.deliveryFee.toLocaleString()} د.ع</span>
                           </div>
                         )}
                       </div>
 
                       {/* Address */}
-                      <div className="bg-black/20 rounded-xl px-4 py-2 mb-4 flex items-start gap-2">
-                        <span className="text-[12px]">📍</span>
+                      <div className="bg-black/20 rounded-xl px-4 py-2.5 mb-4 flex items-start gap-2">
+                        <span>📍</span>
                         <p className="text-white/60 text-[11px] font-bold leading-snug">{order.address}</p>
                       </div>
 
-                      {/* Actions */}
+                      {/* Action buttons */}
                       <div className="flex gap-2">
                         {st.next && (
-                          <button onClick={() => updateOrderStatus(order.id, st.next)} className="flex-1 py-3 rounded-2xl text-white font-black text-[11px] uppercase tracking-wide transition-all active:scale-95 shadow-lg" style={{ backgroundColor: settings.primaryColor }}>
+                          <button onClick={() => updateOrderStatus(order.id, st.next)}
+                            className="flex-1 py-3 rounded-2xl text-white font-black text-[11px] uppercase tracking-wide transition-all active:scale-95 shadow-lg"
+                            style={{ backgroundColor: settings.primaryColor }}>
                             {st.nextLabel}
                           </button>
                         )}
-                        <a href={`https://wa.me/${order.customerPhone?.replace(/\D/g,'')}?text=${encodeURIComponent(`مرحباً ${order.customerName}، طلبك ${st.label}`)}`} target="_blank" rel="noreferrer" className="px-4 py-3 rounded-2xl bg-[#25D366]/20 text-[#25D366] font-black text-[11px] flex items-center justify-center hover:bg-[#25D366]/30 transition-all">
-                          واتساب
+                        <a href={`https://wa.me/${digitsOnly(order.customerPhone)}?text=${encodeURIComponent(`مرحباً ${order.customerName}، طلبك الآن: ${st.label}`)}`}
+                          target="_blank" rel="noreferrer"
+                          className="px-5 py-3 rounded-2xl bg-[#25D366]/20 text-[#25D366] font-black text-[11px] flex items-center justify-center hover:bg-[#25D366]/30 transition-all shrink-0">
+                          💬
                         </a>
                       </div>
                     </div>
                   );
                 })}
-              </section>
+              </div>
             )}
 
-            {/* MENU MANAGEMENT TAB */}
-            {adminTab === "menu" && (<>
+            {/* ── MENU MANAGEMENT TAB ── */}
+            {adminTab === "menu" && (
+            <div className="space-y-8">
             
             {/* BRANDING */}
             <section className="bg-slate-900 rounded-[2.5rem] p-8 border border-white/10 shadow-xl">
@@ -589,6 +637,29 @@ export default function App() {
                 <div className="flex items-center gap-4 bg-black/40 p-4 rounded-xl border border-white/5">
                   <span className="text-white text-[10px] font-bold">لون الخلفية</span>
                   <input type="color" className="w-10 h-10 rounded bg-transparent border-0 cursor-pointer" value={settings.bgColor} onChange={e => updateGlobalSettings("bgColor", e.target.value)} />
+                </div>
+
+                {/* ORDER MODE TOGGLE */}
+                <div className="md:col-span-2 rounded-[1.5rem] border-2 border-orange-500/40 bg-gradient-to-br from-orange-500/10 to-transparent p-5">
+                  <p className="text-white font-black text-sm mb-1 flex items-center gap-2">📲 طريقة استقبال الطلبات</p>
+                  <p className="text-white/40 text-[10px] font-bold mb-4">اختر كيف يصلك الطلب من الزبون</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {[
+                      { val: "both",      icon: "🔗", title: "الاثنين معاً",       desc: "واتساب + لوحة التحكم" },
+                      { val: "whatsapp",  icon: "💬", title: "واتساب فقط",         desc: "الطريقة القديمة" },
+                      { val: "dashboard", icon: "📋", title: "لوحة التحكم فقط",    desc: "بدون واتساب" },
+                    ].map(opt => {
+                      const active = (settings.orderMode || "both") === opt.val;
+                      return (
+                        <button key={opt.val} type="button" onClick={() => updateGlobalSettings("orderMode", opt.val)}
+                          className={`p-4 rounded-2xl border-2 text-right transition-all ${active ? 'border-orange-500 bg-orange-500/20' : 'border-white/10 bg-black/30 hover:border-white/20'}`}>
+                          <div className="text-xl mb-1">{opt.icon}</div>
+                          <p className={`text-[11px] font-black ${active ? 'text-orange-300' : 'text-white/60'}`}>{opt.title}</p>
+                          <p className="text-[9px] text-white/30 font-bold mt-0.5">{opt.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </section>
@@ -689,7 +760,8 @@ export default function App() {
               </div>
             </section>
 
-            </>)}
+            </div>
+            )}
           </div>
         )
       ) : (
@@ -962,7 +1034,32 @@ export default function App() {
                     <p className="text-xs font-black text-amber-900">{settings.checkoutNote}</p>
                   </div>
                 )}
-                <button disabled={!address || !customerName || !customerPhone} onClick={sendWhatsApp} className="w-full py-6 bg-[#25D366] text-white font-black rounded-2xl text-sm shadow-xl disabled:opacity-30 disabled:grayscale transition-all">إرسال عبر واتساب ✅</button>
+                {/* Checkout buttons — adapt to orderMode */}
+                {(() => {
+                  const mode = settings.orderMode || "both";
+                  const disabled = !address || !customerName || !customerPhone;
+                  if (mode === "whatsapp") return (
+                    <button disabled={disabled} onClick={sendWhatsApp} className="w-full py-6 bg-[#25D366] text-white font-black rounded-2xl text-sm shadow-xl disabled:opacity-30 disabled:grayscale transition-all">
+                      إرسال الطلب عبر واتساب 💬
+                    </button>
+                  );
+                  if (mode === "dashboard") return (
+                    <button disabled={disabled} onClick={sendDashboardOnly} className="w-full py-6 text-white font-black rounded-2xl text-sm shadow-xl disabled:opacity-30 disabled:grayscale transition-all active:scale-95" style={{ backgroundColor: settings.primaryColor }}>
+                      تأكيد الطلب ✅
+                    </button>
+                  );
+                  // both
+                  return (
+                    <div className="space-y-3">
+                      <button disabled={disabled} onClick={sendWhatsApp} className="w-full py-5 bg-[#25D366] text-white font-black rounded-2xl text-sm shadow-xl disabled:opacity-30 disabled:grayscale transition-all">
+                        إرسال عبر واتساب 💬
+                      </button>
+                      <button disabled={disabled} onClick={sendDashboardOnly} className="w-full py-5 text-white font-black rounded-2xl text-sm shadow-xl disabled:opacity-30 disabled:grayscale transition-all active:scale-95" style={{ backgroundColor: settings.primaryColor }}>
+                        تأكيد الطلب مباشرة ✅
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
