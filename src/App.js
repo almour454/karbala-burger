@@ -7,7 +7,11 @@ import {
   doc, 
   getDoc,
   setDoc, 
-  deleteDoc
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  orderBy
 } from "firebase/firestore";
 import { 
   getAuth, 
@@ -63,6 +67,7 @@ const appId =
 const getMenuCollection = () => collection(db, 'artifacts', appId, 'public', 'data', 'menu');
 const getSettingsDoc = () => doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
 const getOwnerDoc = () => doc(db, 'artifacts', appId, 'private', 'data', 'admin', 'owner');
+const getOrdersCollection = () => collection(db, 'artifacts', appId, 'private', 'data', 'orders');
 
 const PLACEHOLDER = "https://images.unsplash.com/photo-1550547660-d9450f859349?q=80&w=200&auto=format&fit=crop";
 
@@ -121,6 +126,8 @@ export default function App() {
   const [newItem, setNewItem] = useState({ name: "", price: "", salePrice: "", desc: "", image: "", category: "برجر" });
   const [saveStatus, setSaveStatus] = useState("");
   const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [orders, setOrders] = useState([]);
+  const [adminTab, setAdminTab] = useState("orders");
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -203,6 +210,33 @@ export default function App() {
 
     return () => { unsubMenu(); unsubSettings(); };
   }, [user]);
+
+  useEffect(() => {
+    if (!isUnlocked) return;
+    const q = query(getOrdersCollection(), orderBy("createdAt", "desc"));
+    const unsub = onSnapshot(q, (snap) => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setOrders(prev => {
+        // play a beep if a brand-new "pending" order arrived
+        const prevIds = new Set(prev.map(o => o.id));
+        const hasNew = data.some(o => !prevIds.has(o.id) && o.status === "pending");
+        if (hasNew && prev.length > 0) {
+          try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = 880;
+            gain.gain.setValueAtTime(0.4, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+            osc.start(); osc.stop(ctx.currentTime + 0.6);
+          } catch {}
+        }
+        return data;
+      });
+    });
+    return () => unsub();
+  }, [isUnlocked]);
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
@@ -335,7 +369,13 @@ export default function App() {
     }
   }, [cart, isCheckoutOpen]);
 
-  const sendWhatsApp = () => {
+  const updateOrderStatus = async (orderId, status) => {
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'private', 'data', 'orders', orderId), { status });
+    } catch (e) { console.error(e); }
+  };
+
+  const sendWhatsApp = async () => {
     const itemsStr = Object.entries(cart).map(([id, q]) => {
       const it = menuItems.find(m=>m.id===id);
       return `${q}x ${it?.name}`;
@@ -344,8 +384,24 @@ export default function App() {
       ? `\nمجموع الأصناف: ${cartTotal.toLocaleString()} د.ع\nرسوم التوصيل: ${deliveryFee.toLocaleString()} د.ع\nالإجمالي: ${orderGrandTotal.toLocaleString()} د.ع`
       : `\nالمجموع: ${cartTotal.toLocaleString()} د.ع`;
     const text = `طلب جديد: ${settings.restaurantNameAr}\n\nالاسم: ${customerName}\nالهاتف: ${customerPhone}\nالعنوان: ${address}\n\nالأصناف:\n${itemsStr}${feeLine}`;
+    // Save to Firebase first
+    try {
+      await addDoc(getOrdersCollection(), {
+        customerName,
+        customerPhone,
+        address,
+        items: Object.entries(cart).map(([id, qty]) => {
+          const it = menuItems.find(m => m.id === id);
+          return { id, name: it?.name || id, qty, price: it?.salePrice || it?.price || 0 };
+        }),
+        cartTotal,
+        deliveryFee,
+        grandTotal: orderGrandTotal,
+        status: "pending",
+        createdAt: new Date().toISOString()
+      });
+    } catch (e) { console.error("Order save failed", e); }
     window.open(`https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(text)}`);
-    // Fix: clear cart and close modal after sending
     setCart({});
     setIsCheckoutOpen(false);
     setCustomerName("");
@@ -386,9 +442,106 @@ export default function App() {
           </div>
         ) : (
           <div className="max-w-4xl mx-auto p-6 pb-40 space-y-8" dir="rtl">
-            <div className="flex justify-end">
+            <div className="flex justify-between items-center">
+              {/* Tab switcher */}
+              <div className="flex bg-black/80 p-1 rounded-2xl gap-1">
+                <button onClick={() => setAdminTab("orders")} className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${adminTab === 'orders' ? 'text-white shadow-lg' : 'text-slate-400'}`} style={adminTab === 'orders' ? { backgroundColor: settings.primaryColor } : {}}>
+                  الطلبات
+                  {orders.filter(o => o.status === 'pending').length > 0 && (
+                    <span className="bg-red-500 text-white text-[9px] font-black rounded-full w-5 h-5 flex items-center justify-center animate-pulse">{orders.filter(o => o.status === 'pending').length}</span>
+                  )}
+                </button>
+                <button onClick={() => setAdminTab("menu")} className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${adminTab === 'menu' ? 'bg-white text-black shadow-lg' : 'text-slate-400'}`}>الإدارة</button>
+              </div>
               <button type="button" onClick={handleOwnerLogout} className="bg-black text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-white hover:text-black border border-white/20 transition-colors">تسجيل خروج</button>
             </div>
+
+            {/* ORDERS TAB */}
+            {adminTab === "orders" && (
+              <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em]">الطلبات الواردة</h3>
+                  <span className="text-white/40 text-[10px] font-black">{orders.length} طلب</span>
+                </div>
+
+                {orders.length === 0 && (
+                  <div className="bg-slate-900 rounded-[2rem] p-12 text-center border border-white/5">
+                    <div className="text-5xl mb-4">📭</div>
+                    <p className="text-white/40 font-black text-sm">لا توجد طلبات بعد</p>
+                    <p className="text-white/20 text-[10px] font-bold mt-1">ستظهر هنا فور وصول أي طلب</p>
+                  </div>
+                )}
+
+                {orders.map(order => {
+                  const statusMap = {
+                    pending:    { label: "جديد 🔔",        color: "bg-yellow-500",  next: "preparing", nextLabel: "قيد التحضير 🍳" },
+                    preparing:  { label: "قيد التحضير 🍳", color: "bg-blue-500",    next: "ready",     nextLabel: "جاهز للتوصيل 🛵" },
+                    ready:      { label: "جاهز 🛵",        color: "bg-green-500",   next: "done",      nextLabel: "تم التسليم ✅" },
+                    done:       { label: "مكتمل ✅",       color: "bg-slate-600",   next: null,        nextLabel: null },
+                  };
+                  const st = statusMap[order.status] || statusMap.pending;
+                  const time = order.createdAt ? new Date(order.createdAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' }) : '';
+                  return (
+                    <div key={order.id} className={`bg-slate-900 rounded-[2rem] p-6 border transition-all ${order.status === 'pending' ? 'border-yellow-500/40 shadow-yellow-500/10 shadow-xl' : order.status === 'done' ? 'border-white/5 opacity-60' : 'border-white/10'}`}>
+                      <div className="flex justify-between items-start gap-3 mb-4">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`${st.color} text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase`}>{st.label}</span>
+                            <span className="text-white/30 text-[10px] font-bold">{time}</span>
+                          </div>
+                          <p className="text-white font-black text-lg leading-tight">{order.customerName}</p>
+                          <p className="text-white/50 text-[11px] font-bold mt-0.5" dir="ltr">{order.customerPhone}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-[10px] text-white/30 font-bold">الإجمالي</p>
+                          <p className="text-xl font-black" style={{ color: settings.primaryColor }}>{(order.grandTotal || 0).toLocaleString()} <span className="text-[10px]">د.ع</span></p>
+                        </div>
+                      </div>
+
+                      {/* Items */}
+                      <div className="bg-black/30 rounded-2xl p-4 mb-4 space-y-1">
+                        {(order.items || []).map((it, i) => (
+                          <div key={i} className="flex justify-between items-center text-sm">
+                            <span className="text-white font-bold">{it.name}</span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-white/40 font-black text-[11px]">×{it.qty}</span>
+                              <span className="text-white/60 font-black text-[11px]">{((it.price || 0) * it.qty).toLocaleString()} د.ع</span>
+                            </div>
+                          </div>
+                        ))}
+                        {order.deliveryFee > 0 && (
+                          <div className="flex justify-between items-center text-sm border-t border-white/10 pt-2 mt-2">
+                            <span className="text-white/40 font-bold text-[11px]">رسوم التوصيل</span>
+                            <span className="text-white/40 font-black text-[11px]">{order.deliveryFee.toLocaleString()} د.ع</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Address */}
+                      <div className="bg-black/20 rounded-xl px-4 py-2 mb-4 flex items-start gap-2">
+                        <span className="text-[12px]">📍</span>
+                        <p className="text-white/60 text-[11px] font-bold leading-snug">{order.address}</p>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex gap-2">
+                        {st.next && (
+                          <button onClick={() => updateOrderStatus(order.id, st.next)} className="flex-1 py-3 rounded-2xl text-white font-black text-[11px] uppercase tracking-wide transition-all active:scale-95 shadow-lg" style={{ backgroundColor: settings.primaryColor }}>
+                            {st.nextLabel}
+                          </button>
+                        )}
+                        <a href={`https://wa.me/${order.customerPhone?.replace(/\D/g,'')}?text=${encodeURIComponent(`مرحباً ${order.customerName}، طلبك ${st.label}`)}`} target="_blank" rel="noreferrer" className="px-4 py-3 rounded-2xl bg-[#25D366]/20 text-[#25D366] font-black text-[11px] flex items-center justify-center hover:bg-[#25D366]/30 transition-all">
+                          واتساب
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </section>
+            )}
+
+            {/* MENU MANAGEMENT TAB */}
+            {adminTab === "menu" && (<>
             
             {/* BRANDING */}
             <section className="bg-slate-900 rounded-[2.5rem] p-8 border border-white/10 shadow-xl">
@@ -536,6 +689,7 @@ export default function App() {
               </div>
             </section>
 
+            </>)}
           </div>
         )
       ) : (
