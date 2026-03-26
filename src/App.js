@@ -60,6 +60,7 @@ const firebaseConfig =
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+// Note: offline queueing is prevented by checking navigator.onLine before every write.
 
 const appId =
   typeof window !== "undefined" && window.__app_id
@@ -138,7 +139,9 @@ export default function App() {
   const [historyDate, setHistoryDate] = useState("");
   const [historyOrders, setHistoryOrders] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [confirmedOrderNum, setConfirmedOrderNum] = useState(null); // shows after customer submits
+  const [confirmedOrderNum, setConfirmedOrderNum] = useState(null);
+  const [orderError, setOrderError] = useState(null);   // null | "offline" | "failed"
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
 
   // today's date string "YYYY-MM-DD" in local time
   const todayStr = new Date().toLocaleDateString('en-CA');
@@ -449,10 +452,24 @@ export default function App() {
     setCustomerName("");
     setCustomerPhone("");
     setAddress("");
+    setOrderSubmitting(false);
     if (orderNum) setConfirmedOrderNum(orderNum);
   };
 
+  // Returns false and sets error if offline
+  const checkOnline = () => {
+    if (!navigator.onLine) {
+      setOrderError("offline");
+      setOrderSubmitting(false);
+      return false;
+    }
+    return true;
+  };
+
   const sendWhatsApp = async () => {
+    if (!checkOnline()) return;
+    setOrderSubmitting(true);
+    setOrderError(null);
     const itemsStr = Object.entries(cart).map(([id, q]) => {
       const it = menuItems.find(m=>m.id===id);
       return `${q}x ${it?.name}`;
@@ -461,7 +478,14 @@ export default function App() {
       ? `\nمجموع الأصناف: ${cartTotal.toLocaleString()} د.ع\nرسوم التوصيل: ${deliveryFee.toLocaleString()} د.ع\nالإجمالي: ${orderGrandTotal.toLocaleString()} د.ع`
       : `\nالمجموع: ${cartTotal.toLocaleString()} د.ع`;
     let orderNum = null;
-    try { orderNum = await saveOrderToFirebase(); } catch (e) { console.error(e); }
+    try {
+      orderNum = await saveOrderToFirebase();
+    } catch (e) {
+      console.error(e);
+      setOrderError("failed");
+      setOrderSubmitting(false);
+      return;
+    }
     const numLine = orderNum ? `\nرقم الطلب: #${orderNum}\n` : '';
     const text = `طلب جديد 🍔${numLine}\nالاسم: ${customerName}\nالهاتف: ${customerPhone}\nالعنوان: ${address}\n\nالأصناف:\n${itemsStr}${feeLine}`;
     window.open(`https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(text)}`);
@@ -469,12 +493,16 @@ export default function App() {
   };
 
   const sendDashboardOnly = async () => {
+    if (!checkOnline()) return;
+    setOrderSubmitting(true);
+    setOrderError(null);
     try {
       const orderNum = await saveOrderToFirebase();
       clearAfterOrder(orderNum);
     } catch (e) {
       console.error(e);
-      alert("فشل إرسال الطلب، تحقق من الإنترنت وأعد المحاولة.");
+      setOrderError("failed");
+      setOrderSubmitting(false);
     }
   };
 
@@ -1231,27 +1259,47 @@ export default function App() {
                     <p className="text-xs font-black text-amber-900">{settings.checkoutNote}</p>
                   </div>
                 )}
+                {/* inline error banner */}
+                {orderError && (
+                  <div className={`mb-4 rounded-2xl p-4 text-right border ${orderError === 'offline' ? 'bg-orange-50 border-orange-200' : 'bg-red-50 border-red-200'}`}>
+                    <p className="font-black text-sm mb-0.5">
+                      {orderError === 'offline' ? '📵 لا يوجد اتصال بالإنترنت' : '❌ فشل إرسال الطلب'}
+                    </p>
+                    <p className="text-[11px] font-bold text-slate-500">
+                      {orderError === 'offline'
+                        ? 'تحقق من اتصالك ثم اضغط مجدداً — لن يُرسل الطلب تلقائياً'
+                        : 'حدث خطأ غير متوقع، تحقق من الإنترنت وحاول مرة أخرى'}
+                    </p>
+                  </div>
+                )}
                 {/* Checkout buttons — adapt to orderMode */}
                 {(() => {
                   const mode = settings.orderMode || "both";
-                  const disabled = !address || !customerName || !customerPhone;
+                  const disabled = !address || !customerName || !customerPhone || orderSubmitting;
+                  const loadingLabel = <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin inline-block"></span>جارٍ الإرسال...</span>;
                   if (mode === "whatsapp") return (
-                    <button disabled={disabled} onClick={sendWhatsApp} className="w-full py-6 bg-[#25D366] text-white font-black rounded-2xl text-sm shadow-xl disabled:opacity-30 disabled:grayscale transition-all">
-                      إرسال الطلب عبر واتساب 💬
+                    <button disabled={disabled} onClick={() => { setOrderError(null); sendWhatsApp(); }}
+                      className="w-full py-6 bg-[#25D366] text-white font-black rounded-2xl text-sm shadow-xl disabled:opacity-40 disabled:grayscale transition-all">
+                      {orderSubmitting ? loadingLabel : 'إرسال الطلب عبر واتساب 💬'}
                     </button>
                   );
                   if (mode === "dashboard") return (
-                    <button disabled={disabled} onClick={sendDashboardOnly} className="w-full py-6 text-white font-black rounded-2xl text-sm shadow-xl disabled:opacity-30 disabled:grayscale transition-all active:scale-95" style={{ backgroundColor: settings.primaryColor }}>
-                      تأكيد الطلب ✅
+                    <button disabled={disabled} onClick={() => { setOrderError(null); sendDashboardOnly(); }}
+                      className="w-full py-6 text-white font-black rounded-2xl text-sm shadow-xl disabled:opacity-40 disabled:grayscale transition-all active:scale-95"
+                      style={{ backgroundColor: settings.primaryColor }}>
+                      {orderSubmitting ? loadingLabel : 'تأكيد الطلب ✅'}
                     </button>
                   );
                   return (
                     <div className="space-y-3">
-                      <button disabled={disabled} onClick={sendWhatsApp} className="w-full py-5 bg-[#25D366] text-white font-black rounded-2xl text-sm shadow-xl disabled:opacity-30 disabled:grayscale transition-all">
-                        إرسال عبر واتساب 💬
+                      <button disabled={disabled} onClick={() => { setOrderError(null); sendWhatsApp(); }}
+                        className="w-full py-5 bg-[#25D366] text-white font-black rounded-2xl text-sm shadow-xl disabled:opacity-40 disabled:grayscale transition-all">
+                        {orderSubmitting ? loadingLabel : 'إرسال عبر واتساب 💬'}
                       </button>
-                      <button disabled={disabled} onClick={sendDashboardOnly} className="w-full py-5 text-white font-black rounded-2xl text-sm shadow-xl disabled:opacity-30 disabled:grayscale transition-all active:scale-95" style={{ backgroundColor: settings.primaryColor }}>
-                        تأكيد الطلب مباشرة ✅
+                      <button disabled={disabled} onClick={() => { setOrderError(null); sendDashboardOnly(); }}
+                        className="w-full py-5 text-white font-black rounded-2xl text-sm shadow-xl disabled:opacity-40 disabled:grayscale transition-all active:scale-95"
+                        style={{ backgroundColor: settings.primaryColor }}>
+                        {orderSubmitting ? loadingLabel : 'تأكيد الطلب مباشرة ✅'}
                       </button>
                     </div>
                   );
