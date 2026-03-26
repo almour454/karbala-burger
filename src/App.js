@@ -269,9 +269,12 @@ export default function App() {
               });
             } catch {}
 
-            // Silent auto-print (requires --kiosk-printing in Chrome shortcut)
+            // Silent auto-print — opens a clean receipt window per new order
+            // With --kiosk-printing in Chrome shortcut, no dialog appears
             if (autoPrintEnabled) {
-              try { window.print(); } catch {}
+              freshNewOrders.forEach(o => {
+                try { printOrderReceipt(o); } catch {}
+              });
             }
           }
 
@@ -528,6 +531,51 @@ export default function App() {
     }
   };
 
+  // Build clean receipt HTML for a given order object
+  const buildReceiptHtml = (order) => {
+    const time = order.createdAt
+      ? new Date(order.createdAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })
+      : '';
+    const dateStr = order.dateStr || getDateStr();
+    const rows = (order.items || [])
+      .map(it => `<div class="row"><span>${it.name}</span><span>×${it.qty} — ${((it.price||0)*it.qty).toLocaleString()} د.ع</span></div>`)
+      .join('');
+    const deliveryRow = order.deliveryFee > 0
+      ? `<div class="row"><span>توصيل</span><span>${order.deliveryFee.toLocaleString()} د.ع</span></div>`
+      : '';
+    return `<html><head><meta charset="utf-8"/>
+      <style>
+        body{font-family:sans-serif;padding:16px;direction:rtl;font-size:13px;max-width:300px;margin:0}
+        h1{font-size:22px;font-weight:900;margin:0 0 2px}
+        .num{font-size:48px;font-weight:900;line-height:1;margin:4px 0 10px}
+        .row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dotted #ccc}
+        .total{font-weight:900;font-size:16px;margin-top:8px}
+        .meta{color:#666;font-size:11px;margin-top:4px}
+        hr{border:none;border-top:2px dashed #333;margin:10px 0}
+      </style></head><body>
+      <h1>${settings.restaurantName}</h1>
+      <div class="meta">${dateStr} — ${time}</div>
+      <div class="num">#${order.orderNumber || '—'}</div>
+      <div class="meta" style="font-weight:700">${order.customerName} — ${order.customerPhone}</div>
+      <div class="meta">📍 ${order.address}</div>
+      <hr/>
+      ${rows}
+      ${deliveryRow}
+      <div class="row total"><span>الإجمالي</span><span>${(order.grandTotal||0).toLocaleString()} د.ع</span></div>
+      <hr/>
+      <div class="meta" style="text-align:center;margin-top:8px">شكراً لطلبك 🍔</div>
+      <script>window.onload=()=>{window.print();window.close();}<\/script>
+      </body></html>`;
+  };
+
+  // Open a dedicated receipt window and print it (works with --kiosk-printing)
+  const printOrderReceipt = (order) => {
+    const win = window.open('', '_blank', 'width=320,height=500');
+    if (!win) return; // blocked by popup blocker
+    win.document.write(buildReceiptHtml(order));
+    win.document.close();
+  };
+
   return (
     <div className="min-h-screen transition-colors duration-500" style={{ backgroundColor: settings.bgColor, fontFamily: 'sans-serif' }}>
       
@@ -648,34 +696,7 @@ export default function App() {
                     ? new Date(order.createdAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })
                     : '';
 
-                  const printOrder = () => {
-                    const win = window.open('', '_blank', 'width=320,height=500');
-                    win.document.write(`
-                      <html><head><meta charset="utf-8"/>
-                      <style>
-                        body{font-family:sans-serif;padding:16px;direction:rtl;font-size:13px;max-width:300px}
-                        h1{font-size:22px;font-weight:900;margin:0 0 2px}
-                        .num{font-size:48px;font-weight:900;line-height:1;margin:4px 0 10px}
-                        .row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dotted #ccc}
-                        .total{font-weight:900;font-size:16px;margin-top:8px}
-                        .meta{color:#666;font-size:11px;margin-top:4px}
-                        hr{border:none;border-top:2px dashed #333;margin:10px 0}
-                      </style></head><body>
-                      <h1>${settings.restaurantName}</h1>
-                      <div class="meta">${todayStr} — ${time}</div>
-                      <div class="num">#${order.orderNumber || '—'}</div>
-                      <div class="meta" style="font-weight:700">${order.customerName} — ${order.customerPhone}</div>
-                      <div class="meta">📍 ${order.address}</div>
-                      <hr/>
-                      ${(order.items||[]).map(it=>`<div class="row"><span>${it.name}</span><span>×${it.qty} — ${((it.price||0)*it.qty).toLocaleString()} د.ع</span></div>`).join('')}
-                      ${order.deliveryFee>0?`<div class="row"><span>توصيل</span><span>${order.deliveryFee.toLocaleString()} د.ع</span></div>`:''}
-                      <div class="row total"><span>الإجمالي</span><span>${(order.grandTotal||0).toLocaleString()} د.ع</span></div>
-                      <hr/>
-                      <div class="meta" style="text-align:center;margin-top:8px">شكراً لطلبك 🍔</div>
-                      <script>window.onload=()=>{window.print();window.close();}<\/script>
-                      </body></html>`);
-                    win.document.close();
-                  };
+                  const printOrder = () => printOrderReceipt(order);
 
                   return (
                     <div key={order.id}
@@ -1502,52 +1523,6 @@ export default function App() {
           50% { transform: rotate(-10deg) translate(4px, -3px); }
         }
         .deal-bg-img { animation: dealBgDrift 8s ease-in-out infinite; }
-
-        /* ── AUTO-PRINT RECEIPT STYLES ── */
-        @media print {
-          /* Hide everything except order cards */
-          body > * { display: none !important; }
-          .owner-panel { display: block !important; background: #fff !important; padding: 0 !important; }
-          /* Hide sidebar, nav, tabs, buttons, history, menu tabs */
-          nav, .no-scrollbar, [class*="backdrop-blur"],
-          button, a, input, select, textarea,
-          [class*="grid-cols-3"],
-          [class*="animate-pulse"],
-          [class*="bg-slate-900"]:not(.order-card) { display: none !important; }
-          /* Show only order cards */
-          .order-card {
-            display: block !important;
-            page-break-inside: avoid;
-            page-break-after: always;
-            border: none !important;
-            box-shadow: none !important;
-            background: #fff !important;
-            color: #000 !important;
-            padding: 12px !important;
-            font-family: monospace !important;
-            font-size: 12px !important;
-            max-width: 280px !important;
-            margin: 0 auto !important;
-          }
-          .order-card * { color: #000 !important; background: transparent !important; }
-          /* Dashed separator between order sections */
-          .order-card::before {
-            content: '- - - - - - - - - - - - - - - - - -';
-            display: block;
-            text-align: center;
-            letter-spacing: 1px;
-            margin-bottom: 8px;
-            font-size: 11px;
-          }
-          .order-card::after {
-            content: '- - - - - - - - - - - - - - - - - -';
-            display: block;
-            text-align: center;
-            letter-spacing: 1px;
-            margin-top: 8px;
-            font-size: 11px;
-          }
-        }
       `}} />
     </div>
   );
