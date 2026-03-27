@@ -70,11 +70,27 @@ const appId =
 const getMenuCollection = () => collection(db, 'artifacts', appId, 'public', 'data', 'menu');
 const getSettingsDoc = () => doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
 const getOwnerDoc = () => doc(db, 'artifacts', appId, 'private', 'data', 'admin', 'owner');
-// Orders stored per-day: /orders/{dateStr}/items/{orderId}
 const getOrdersCollection = (dateStr) => collection(db, 'artifacts', appId, 'private', 'data', 'orders', dateStr, 'items');
-// Counter doc stores the daily order count: /orders/{dateStr}/meta/counter
 const getOrderCounterDoc = (dateStr) => doc(db, 'artifacts', appId, 'private', 'data', 'orders', dateStr, 'meta', 'counter');
 const getDateStr = () => new Date().toLocaleDateString('en-CA');
+
+// ============================================================
+// 🚩 BUNDLE — change one word to switch plans
+//
+//   "basic"    → WhatsApp only      (400,000 IQD)
+//   "premium"  → Full POS Dashboard (500,000 IQD)
+//
+const BUNDLE = "basic";
+// ============================================================
+
+// Shorthand used throughout the code — don't touch this line
+const FEATURES = {
+  dashboard:    BUNDLE === "premium",
+  history:      BUNDLE === "premium",
+  orderNumbers: BUNDLE === "premium",
+  printSlip:    BUNDLE === "premium",
+  soundAlert:   BUNDLE === "premium",
+};
 
 const PLACEHOLDER = "https://images.unsplash.com/photo-1550547660-d9450f859349?q=80&w=200&auto=format&fit=crop";
 
@@ -135,7 +151,7 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState("");
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [orders, setOrders] = useState([]);
-  const [adminTab, setAdminTab] = useState("orders");
+  const [adminTab, setAdminTab] = useState(FEATURES.dashboard ? "orders" : "menu");
   const [historyDate, setHistoryDate] = useState("");
   const [historyOrders, setHistoryOrders] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -240,6 +256,7 @@ export default function App() {
           const prevIds = new Set(prev.map(o => o.id));
           const hasNew = incoming.some(o => !prevIds.has(o.id) && o.status === "pending");
           if (hasNew && prev.length > 0) {
+            if (FEATURES.soundAlert) {
             try {
               const ctx = new (window.AudioContext || window.webkitAudioContext)();
               [0, 0.18].forEach(t => {
@@ -253,6 +270,7 @@ export default function App() {
                 osc.stop(ctx.currentTime + t + 0.35);
               });
             } catch {}
+            }
           }
           return incoming;
         });
@@ -544,6 +562,7 @@ export default function App() {
             {/* TOP BAR — tabs + logout */}
             <div className="flex items-center justify-between gap-3">
               <div className="flex bg-black/80 backdrop-blur-md p-1 rounded-2xl gap-1 flex-wrap">
+                {FEATURES.dashboard && (
                 <button onClick={() => setAdminTab("orders")}
                   className={`relative px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-2 ${adminTab === 'orders' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
                   style={adminTab === 'orders' ? { backgroundColor: settings.primaryColor } : {}}>
@@ -554,10 +573,13 @@ export default function App() {
                     </span>
                   )}
                 </button>
+                )}
+                {FEATURES.history && (
                 <button onClick={() => { setAdminTab("history"); setHistoryDate(""); setHistoryOrders([]); }}
                   className={`px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all ${adminTab === 'history' ? 'bg-white text-black shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                   السجل 📅
                 </button>
+                )}
                 <button onClick={() => setAdminTab("menu")}
                   className={`px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all ${adminTab === 'menu' ? 'bg-white text-black shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                   الإدارة
@@ -570,7 +592,7 @@ export default function App() {
             </div>
 
             {/* ── ORDERS TAB ── */}
-            {adminTab === "orders" && (
+            {FEATURES.dashboard && adminTab === "orders" && (
               <div className="space-y-4">
 
                 {/* Today's summary */}
@@ -653,10 +675,12 @@ export default function App() {
                       {/* Header row — order number prominent */}
                       <div className="flex justify-between items-start gap-3 mb-4">
                         <div className="flex items-start gap-3">
-                          {/* Big order number */}
+                          {/* Big order number badge */}
+                          {FEATURES.orderNumbers && (
                           <div className="shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl text-white" style={{ backgroundColor: settings.primaryColor }}>
                             #{order.orderNumber || '?'}
                           </div>
+                          )}
                           <div>
                             <div className="flex items-center gap-2 mb-1 flex-wrap">
                               <span className={`${st.bg} text-white text-[9px] font-black px-3 py-1 rounded-full`}>{st.label}</span>
@@ -670,10 +694,12 @@ export default function App() {
                           <p className="text-2xl font-black leading-none" style={{ color: settings.primaryColor }}>
                             {(order.grandTotal || 0).toLocaleString()} <span className="text-[10px]">د.ع</span>
                           </p>
+                          {FEATURES.printSlip && (
                           <button onClick={printOrder}
                             className="text-[10px] font-black text-white/40 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1">
                             🖨️ طباعة
                           </button>
+                          )}
                         </div>
                       </div>
 
@@ -742,7 +768,7 @@ export default function App() {
             )}
 
             {/* ── HISTORY TAB ── */}
-            {adminTab === "history" && (
+            {FEATURES.history && adminTab === "history" && (
               <div className="space-y-4">
                 <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em]">سجل الطلبات السابقة 📅</h3>
 
@@ -1307,9 +1333,10 @@ export default function App() {
                     </p>
                   </div>
                 )}
-                {/* Checkout buttons — adapt to orderMode */}
+                {/* Checkout buttons — adapt to orderMode + FEATURES */}
                 {(() => {
-                  const mode = settings.orderMode || "both";
+                  // Basic bundle always forces WhatsApp-only
+                  const mode = FEATURES.dashboard ? (settings.orderMode || "both") : "whatsapp";
                   const disabled = !address || !customerName || !customerPhone || orderSubmitting;
                   const loadingLabel = <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin inline-block"></span>جارٍ الإرسال...</span>;
                   if (mode === "whatsapp") return (
@@ -1344,7 +1371,7 @@ export default function App() {
           )}
 
           {/* ORDER CONFIRMED POPUP */}
-          {confirmedOrderNum && (
+          {FEATURES.orderNumbers && confirmedOrderNum && (
             <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-6">
               <div className="bg-white rounded-[3rem] p-10 text-center max-w-xs w-full shadow-2xl animate-slide-up" dir="rtl">
                 <div className="text-6xl mb-4">✅</div>
