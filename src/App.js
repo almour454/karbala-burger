@@ -167,11 +167,9 @@ export default function App() {
   const [showMidnightWarning, setShowMidnightWarning] = useState(false);
   const [dayConfirmed, setDayConfirmed] = useState(false);
   const [searchOrderNum, setSearchOrderNum] = useState("");
-  const [searchResult, setSearchResult] = useState(null);
+  const [resetUnlocked, setResetUnlocked] = useState(false);
+  const [searchResult, setSearchResult] = useState(null); // null | "found" | "notfound"
   const [historySearchNum, setHistorySearchNum] = useState("");
-  const [historyMode, setHistoryMode] = useState("weekly"); // "weekly" | "daily"
-  const [expandedWeek, setExpandedWeek] = useState(null);  // week index
-  const [expandedDay, setExpandedDay]   = useState(null);  // "YYYY-MM-DD"
 
   // today's date string "YYYY-MM-DD" in local time
   const todayStr = new Date().toLocaleDateString('en-CA');
@@ -665,45 +663,21 @@ export default function App() {
   };
 
   const handleConfirmDay = async () => {
-    if (!window.confirm('تأكيد إنهاء اليوم؟\nسيتم نقل كل الطلبات النشطة إلى منجزة وحفظ المبيعات في السجل.')) return;
+    if (!window.confirm('تأكيد إنهاء اليوم؟\nسيتم حفظ المبيعات في السجل وتصفير اليوم.')) return;
     const d = getDateStr();
+    const finishedOrders = orders.filter(o => o.status === 'finished');
+    const total = finishedOrders.reduce((s, o) => s + (o.grandTotal || 0), 0);
     try {
-      // 1 — move all remaining active orders to finished
-      const stillActive = orders.filter(o => o.status === 'active');
-      for (const o of stillActive) {
-        await updateDoc(
-          doc(db, 'artifacts', appId, 'private', 'data', 'orders', d, 'items', o.id),
-          { status: 'finished', finishedAt: new Date().toISOString() }
-        );
-      }
-      // 2 — compute total from ALL orders (active just moved + already finished)
-      const allDone = orders.filter(o => o.status === 'active' || o.status === 'finished');
-      const total = allDone.reduce((s, o) => s + (o.grandTotal || 0), 0);
-      // 3 — write confirmed meta
       await setDoc(
         doc(db, 'artifacts', appId, 'private', 'data', 'orders', d, 'meta', 'confirmed'),
-        { confirmedAt: new Date().toISOString(), total, orderCount: allDone.length, autoConfirmed: false }
+        { confirmedAt: new Date().toISOString(), total, orderCount: finishedOrders.length, autoConfirmed: false }
       );
       setDayConfirmed(true);
       setShowMidnightWarning(false);
     } catch (e) { console.error(e); }
   };
 
-  // DEV TOOL — reset today's orders + counter back to zero
-  const handleResetDay = async () => {
-    if (!window.confirm('⚠️ تصفير كامل ليوم اليوم؟\nسيتم حذف جميع الطلبات وإعادة العداد إلى صفر.\n\nهذا للاختبار فقط — لا يمكن التراجع.')) return;
-    const d = getDateStr();
-    try {
-      // delete all orders
-      const snap = await getDocs(getOrdersCollection(d));
-      for (const docSnap of snap.docs) {
-        await deleteDoc(docSnap.ref);
-      }
-      // reset counter
-      await setDoc(getOrderCounterDoc(d), { count: 0 });
-      setDayConfirmed(false);
-    } catch (e) { console.error(e); }
-  };
+  // Search today's orders by order number
   const handleSearchToday = (numStr) => {
     const num = parseInt(numStr, 10);
     if (!num) { setSearchResult(null); return; }
@@ -720,25 +694,6 @@ export default function App() {
       } catch (e) { console.error(e); }
     }
   };
-
-  // Build last 4 weeks of dates for the weekly history view
-  const getWeeks = () => {
-    const weeks = [];
-    const today = new Date();
-    for (let w = 0; w < 4; w++) {
-      const days = [];
-      for (let d = 6; d >= 0; d--) {
-        const date = new Date(today);
-        date.setDate(today.getDate() - (w * 7 + d));
-        if (date <= today) {
-          days.push(date.toLocaleDateString('en-CA'));
-        }
-      }
-      if (days.length > 0) weeks.push(days);
-    }
-    return weeks;
-  };
-  const weeks = getWeeks();
 
   // Split orders into tabs
   const activeOrders   = orders.filter(o => o.status === 'active');
@@ -921,9 +876,9 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Confirm Day button */}
+                {/* Confirm Day button — smaller, less scary */}
                 <button onClick={handleConfirmDay}
-                  className="w-full py-4 rounded-2xl text-white font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-all bg-gradient-to-r from-green-600 to-emerald-500">
+                  className="w-full py-3 rounded-2xl text-white font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all bg-green-600/80 hover:bg-green-600">
                   تأكيد اليوم وحساب المبيعات ✅
                 </button>
 
@@ -954,6 +909,12 @@ export default function App() {
                       const time = order.createdAt
                         ? new Date(order.createdAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })
                         : '';
+                      const elapsedMin = order.createdAt
+                        ? Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000)
+                        : 0;
+                      const autoGreyMin = (Number(settings.autoGreyHours) || 5) * 60;
+                      const pct = Math.min(100, Math.round((elapsedMin / autoGreyMin) * 100));
+                      const timerColor = pct < 50 ? '#22c55e' : pct < 80 ? '#f59e0b' : '#ef4444';
                       return (
                         <div key={order.id} className="bg-slate-900 rounded-[2rem] p-6 border border-yellow-500/40 shadow-yellow-500/10 shadow-2xl">
                           <div className="flex justify-between items-start gap-3 mb-4">
@@ -1001,9 +962,21 @@ export default function App() {
                               </div>
                             )}
                           </div>
-                          <div className="bg-black/20 rounded-xl px-4 py-2.5 mb-4 flex items-start gap-2">
+                          <div className="bg-black/20 rounded-xl px-4 py-2.5 mb-3 flex items-start gap-2">
                             <span>📍</span>
                             <p className="text-white/60 text-[11px] font-bold leading-snug">{order.address}</p>
+                          </div>
+                          {/* Elapsed timer bar */}
+                          <div className="mb-4 px-1">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: timerColor }}>
+                                ⏱ {elapsedMin < 60 ? `${elapsedMin} دقيقة` : `${Math.floor(elapsedMin/60)}س ${elapsedMin%60}د`}
+                              </span>
+                              <span className="text-white/20 text-[9px] font-bold">ينتقل تلقائياً بعد {autoGreyMin} دقيقة</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${pct}%`, backgroundColor: timerColor }} />
+                            </div>
                           </div>
                           <div className="flex gap-2">
                             <a href={`https://wa.me/${digitsOnly(order.customerPhone)}?text=${encodeURIComponent(`مرحباً ${order.customerName}، طلبك قيد التوصيل 🛵`)}`}
@@ -1088,177 +1061,181 @@ export default function App() {
                   </div>
                 )}
               </div>
+
+              {/* ── TINY RESET — barely visible, locked by default ── */}
+              <div className="flex items-center justify-end gap-2 pt-1 opacity-30 hover:opacity-80 transition-opacity">
+                <span className="text-[9px] text-white/30 font-bold">إعادة العداد من #1</span>
+                {!resetUnlocked ? (
+                  <button onClick={() => setResetUnlocked(true)}
+                    className="text-[9px] font-black text-white/20 hover:text-white/50 bg-white/5 px-2 py-1 rounded-lg transition-all">
+                    🔒 فتح
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm('تأكيد إعادة عداد الطلبات من #1؟\nهذا للاختبار فقط — لا يحذف الطلبات.')) return;
+                        try { await deleteDoc(getOrderCounterDoc(todayStr)); } catch(e) { console.error(e); }
+                        setResetUnlocked(false);
+                      }}
+                      className="text-[9px] font-black text-red-400/70 hover:text-red-400 bg-red-500/10 px-2 py-1 rounded-lg transition-all">
+                      إعادة
+                    </button>
+                    <button onClick={() => setResetUnlocked(false)}
+                      className="text-[9px] font-black text-white/20 hover:text-white/40 bg-white/5 px-2 py-1 rounded-lg transition-all">
+                      🔒
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* ── HISTORY TAB ── */}
             {FEATURES.history && adminTab === "history" && (
               <div className="space-y-4">
-                <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em]">سجل الطلبات 📅</h3>
+                <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em]">سجل الطلبات السابقة 📅</h3>
 
-                {/* Week selector */}
-                <div className="space-y-2">
-                  {weeks.map((weekDays, wi) => {
-                    const weekStart = weekDays[0];
-                    const weekEnd   = weekDays[weekDays.length - 1];
-                    const weekLabel = wi === 0 ? 'هذا الأسبوع' : wi === 1 ? 'الأسبوع الماضي' : `أسبوع ${wi + 1}`;
-                    const isExpanded = expandedWeek === wi;
-                    return (
-                      <div key={wi} className="bg-slate-900 rounded-[2rem] border border-white/5 overflow-hidden">
-                        {/* Week header */}
-                        <button
-                          onClick={() => { setExpandedWeek(isExpanded ? null : wi); setExpandedDay(null); setHistoryOrders([]); setHistorySearchNum(""); }}
-                          className="w-full flex items-center justify-between px-6 py-4 text-right">
-                          <div>
-                            <p className="text-white font-black text-sm">{weekLabel}</p>
-                            <p className="text-white/30 text-[10px] font-bold mt-0.5">{weekStart} — {weekEnd}</p>
-                          </div>
-                          <span className="text-white/40 font-black text-lg">{isExpanded ? '▲' : '▼'}</span>
-                        </button>
-
-                        {/* Days inside week */}
-                        {isExpanded && (
-                          <div className="px-4 pb-4 space-y-2">
-                            {weekDays.map(dayStr => {
-                              const isToday = dayStr === todayStr;
-                              const isDayExpanded = expandedDay === dayStr;
-                              const dayDate = new Date(dayStr);
-                              const dayName = dayDate.toLocaleDateString('ar-IQ', { weekday: 'long' });
-                              const dayDisplay = dayDate.toLocaleDateString('ar-IQ', { day: 'numeric', month: 'long' });
-                              return (
-                                <div key={dayStr} className="bg-black/30 rounded-2xl overflow-hidden border border-white/5">
-                                  {/* Day header */}
-                                  <button
-                                    onClick={async () => {
-                                      if (isDayExpanded) { setExpandedDay(null); setHistoryOrders([]); return; }
-                                      setExpandedDay(dayStr);
-                                      setHistorySearchNum("");
-                                      await loadHistoryOrders(dayStr);
-                                    }}
-                                    className="w-full flex items-center justify-between px-5 py-3 text-right">
-                                    <div className="flex items-center gap-3">
-                                      <div className={`w-2 h-2 rounded-full ${isToday ? 'bg-orange-500' : 'bg-white/20'}`} />
-                                      <div>
-                                        <p className={`font-black text-sm ${isToday ? 'text-orange-400' : 'text-white/80'}`}>{dayName}</p>
-                                        <p className="text-white/30 text-[10px] font-bold">{dayDisplay}</p>
-                                      </div>
-                                    </div>
-                                    <span className="text-white/30 text-xs font-black">{isDayExpanded ? '▲' : '▼'}</span>
-                                  </button>
-
-                                  {/* Orders for this day */}
-                                  {isDayExpanded && (
-                                    <div className="px-4 pb-4 space-y-3">
-                                      {historyLoading && (
-                                        <div className="text-center py-6">
-                                          <div className="text-2xl animate-pulse">⏳</div>
-                                          <p className="text-white/30 text-xs font-bold mt-2">جارٍ التحميل...</p>
-                                        </div>
-                                      )}
-
-                                      {!historyLoading && historyOrders.length === 0 && (
-                                        <div className="text-center py-6">
-                                          <p className="text-white/30 text-xs font-bold">لا توجد طلبات في هذا اليوم</p>
-                                        </div>
-                                      )}
-
-                                      {!historyLoading && historyOrders.length > 0 && (
-                                        <>
-                                          {/* Day summary */}
-                                          <div className="grid grid-cols-3 gap-2 mb-2">
-                                            {[
-                                              { label: "طلبات", value: historyOrders.length },
-                                              { label: "منجزة", value: historyOrders.filter(o => o.status === 'finished' || o.status === 'done').length },
-                                              { label: "المبيعات", value: historyOrders.filter(o => o.status === 'finished' || o.status === 'done').reduce((s, o) => s + (o.grandTotal || 0), 0).toLocaleString() + " د.ع" },
-                                            ].map(s => (
-                                              <div key={s.label} className="bg-black/40 rounded-xl p-3 text-center border border-white/5">
-                                                <p className="text-white font-black text-sm leading-tight">{s.value}</p>
-                                                <p className="text-white/30 text-[9px] font-bold mt-1">{s.label}</p>
-                                              </div>
-                                            ))}
-                                          </div>
-
-                                          {/* Search inside day */}
-                                          <input
-                                            type="number"
-                                            placeholder="بحث برقم الطلب..."
-                                            value={historySearchNum}
-                                            onChange={e => setHistorySearchNum(e.target.value)}
-                                            className="w-full bg-black/50 border border-white/10 p-3 rounded-xl text-white text-sm font-bold outline-none focus:border-orange-500 text-right mb-2"
-                                            dir="rtl"
-                                          />
-
-                                          {/* Order cards */}
-                                          {historyOrders
-                                            .filter(o => !historySearchNum || String(o.orderNumber).includes(historySearchNum))
-                                            .map(order => {
-                                              const isFinished = order.status === 'finished' || order.status === 'done';
-                                              const time = order.createdAt
-                                                ? new Date(order.createdAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })
-                                                : '';
-                                              return (
-                                                <div key={order.id}
-                                                  className={`bg-slate-900 rounded-2xl p-4 border ${isFinished ? 'border-green-500/20' : 'border-yellow-500/20'}`}>
-                                                  <div className="flex justify-between items-start gap-3 mb-2">
-                                                    <div className="flex items-center gap-2">
-                                                      {FEATURES.orderNumbers && (
-                                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs text-white shrink-0 ${isFinished ? 'bg-green-600' : 'bg-yellow-500'}`}>
-                                                          #{order.orderNumber || '?'}
-                                                        </div>
-                                                      )}
-                                                      <div>
-                                                        <p className="text-white font-black text-sm">{order.customerName}</p>
-                                                        <p className="text-white/40 text-[10px] font-bold" dir="ltr">{order.customerPhone}</p>
-                                                        <p className="text-white/30 text-[9px] font-bold">{time} · 📍 {order.address}</p>
-                                                      </div>
-                                                    </div>
-                                                    <p className="font-black text-base shrink-0" style={{ color: settings.primaryColor }}>
-                                                      {(order.grandTotal || 0).toLocaleString()} <span className="text-[9px]">د.ع</span>
-                                                    </p>
-                                                  </div>
-                                                  <div className="bg-black/20 rounded-xl p-2 mb-2 space-y-0.5">
-                                                    {(order.items || []).map((it, i) => (
-                                                      <div key={i} className="flex justify-between text-[10px]">
-                                                        <span className="text-white/60 font-bold">{it.name}</span>
-                                                        <div className="flex gap-2">
-                                                          <span className="text-white/30 font-black">×{it.qty}</span>
-                                                          <span className="text-white/20 font-black">{((it.price || 0) * it.qty).toLocaleString()} د.ع</span>
-                                                        </div>
-                                                      </div>
-                                                    ))}
-                                                  </div>
-                                                  <div className="flex gap-2">
-                                                    {FEATURES.printSlip && (
-                                                      <button onClick={() => printOrderReceipt({ ...order, dateStr: dayStr })}
-                                                        className="px-3 py-2 rounded-xl bg-white/5 text-white/40 hover:text-white font-black text-[10px] transition-all shrink-0">
-                                                        🖨️
-                                                      </button>
-                                                    )}
-                                                    <a href={`https://wa.me/${digitsOnly(order.customerPhone)}`}
-                                                      target="_blank" rel="noreferrer"
-                                                      className="px-3 py-2 rounded-xl bg-[#25D366]/10 text-[#25D366] font-black text-[10px] flex items-center justify-center hover:bg-[#25D366]/20 transition-all shrink-0">
-                                                      💬
-                                                    </a>
-                                                    <button onClick={() => handleHistoryDelete(order, dayStr)}
-                                                      className="flex-1 py-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white font-black text-[10px] transition-all">
-                                                      🗑️ حذف
-                                                    </button>
-                                                  </div>
-                                                </div>
-                                              );
-                                            })}
-                                        </>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                {/* Date picker */}
+                <div className="bg-slate-900 rounded-[2rem] p-6 border border-white/5">
+                  <p className="text-white/50 text-[11px] font-bold mb-3">اختر تاريخاً لعرض طلباته</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      max={todayStr}
+                      value={historyDate}
+                      onChange={e => {
+                        setHistoryDate(e.target.value);
+                        setHistorySearchNum("");
+                        if (e.target.value) loadHistoryOrders(e.target.value);
+                      }}
+                      className="flex-1 bg-black/50 border border-white/10 p-4 rounded-xl text-white text-sm font-bold outline-none focus:border-orange-500"
+                    />
+                    {historyDate && (
+                      <button onClick={() => { setHistoryDate(""); setHistoryOrders([]); setHistorySearchNum(""); }}
+                        className="px-4 rounded-xl bg-white/5 text-white/40 hover:text-white font-black text-sm transition-all">
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {historyLoading && (
+                  <div className="text-center py-10">
+                    <div className="text-3xl animate-pulse">⏳</div>
+                    <p className="text-white/30 text-xs font-bold mt-2">جارٍ التحميل...</p>
+                  </div>
+                )}
+
+                {!historyLoading && historyDate && historyOrders.length === 0 && (
+                  <div className="bg-slate-900 rounded-[2rem] p-12 text-center border border-white/5">
+                    <div className="text-4xl mb-3">🗓️</div>
+                    <p className="text-white/40 font-black text-sm">لا توجد طلبات في هذا اليوم</p>
+                  </div>
+                )}
+
+                {!historyLoading && historyOrders.length > 0 && (
+                  <>
+                    {/* History summary */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: "عدد الطلبات", value: historyOrders.length },
+                        { label: "منجزة", value: historyOrders.filter(o => o.status === 'finished' || o.status === 'done').length },
+                        { label: "إجمالي المبيعات", value: historyOrders.filter(o => o.status === 'finished' || o.status === 'done').reduce((s, o) => s + (o.grandTotal || 0), 0).toLocaleString() + " د.ع" },
+                      ].map(s => (
+                        <div key={s.label} className="bg-slate-900 rounded-2xl p-4 border border-white/5 text-center">
+                          <p className="text-white font-black text-lg leading-tight">{s.value}</p>
+                          <p className="text-white/30 text-[9px] font-bold mt-1">{s.label}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Search by order number inside history */}
+                    <div className="bg-slate-900 rounded-2xl p-4 border border-white/5">
+                      <p className="text-white/40 text-[10px] font-bold mb-2">بحث برقم الطلب في هذا اليوم 🔍</p>
+                      <input
+                        type="number"
+                        placeholder="رقم الطلب..."
+                        value={historySearchNum}
+                        onChange={e => setHistorySearchNum(e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 p-3 rounded-xl text-white text-sm font-bold outline-none focus:border-orange-500 text-right"
+                        dir="rtl"
+                      />
+                    </div>
+
+                    {/* History order cards — editable */}
+                    {historyOrders
+                      .filter(o => !historySearchNum || String(o.orderNumber).includes(historySearchNum))
+                      .map(order => {
+                        const isFinished = order.status === 'finished' || order.status === 'done';
+                        const time = order.createdAt
+                          ? new Date(order.createdAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })
+                          : '';
+                        return (
+                          <div key={order.id}
+                            className={`bg-slate-900 rounded-[2rem] p-5 border transition-all ${isFinished ? 'border-green-500/20 opacity-80' : 'border-yellow-500/20'}`}>
+                            <div className="flex justify-between items-start gap-3 mb-3">
+                              <div className="flex items-start gap-3">
+                                {FEATURES.orderNumbers && (
+                                  <div className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center font-black text-base text-white ${isFinished ? 'bg-green-600' : 'bg-yellow-500'}`}>
+                                    #{order.orderNumber || '?'}
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className={`text-[9px] font-black px-2.5 py-1 rounded-full text-white ${isFinished ? 'bg-green-600' : 'bg-yellow-500'}`}>
+                                      {isFinished ? 'منجز ✓' : 'نشط'}
+                                    </span>
+                                    <span className="text-white/30 text-[10px] font-bold">{time}</span>
+                                  </div>
+                                  <p className="text-white font-black">{order.customerName}</p>
+                                  <p className="text-white/40 text-[11px] font-bold" dir="ltr">{order.customerPhone}</p>
+                                  <p className="text-white/30 text-[10px] font-bold mt-1">📍 {order.address}</p>
+                                </div>
+                              </div>
+                              <p className="text-lg font-black shrink-0" style={{ color: settings.primaryColor }}>
+                                {(order.grandTotal || 0).toLocaleString()} <span className="text-[10px]">د.ع</span>
+                              </p>
+                            </div>
+                            <div className="bg-black/30 rounded-xl p-3 space-y-1 mb-3">
+                              {(order.items || []).map((it, i) => (
+                                <div key={i} className="flex justify-between text-[11px]">
+                                  <span className="text-white/70 font-bold">{it.name}</span>
+                                  <div className="flex gap-3">
+                                    <span className="text-white/40 font-black">×{it.qty}</span>
+                                    <span className="text-white/30 font-black">{((it.price || 0) * it.qty).toLocaleString()} د.ع</span>
+                                  </div>
+                                </div>
+                              ))}
+                              {order.deliveryFee > 0 && (
+                                <div className="flex justify-between text-[11px] border-t border-white/10 pt-1 mt-1">
+                                  <span className="text-white/40 font-bold">توصيل</span>
+                                  <span className="text-white/30 font-black">{order.deliveryFee.toLocaleString()} د.ع</span>
+                                </div>
+                              )}
+                            </div>
+                            {/* Action row */}
+                            <div className="flex gap-2">
+                              {FEATURES.printSlip && (
+                                <button onClick={() => printOrderReceipt({ ...order, dateStr: historyDate })}
+                                  className="px-4 py-2.5 rounded-xl bg-white/5 text-white/40 hover:text-white font-black text-[10px] transition-all shrink-0">
+                                  🖨️
+                                </button>
+                              )}
+                              <a href={`https://wa.me/${digitsOnly(order.customerPhone)}`}
+                                target="_blank" rel="noreferrer"
+                                className="px-4 py-2.5 rounded-xl bg-[#25D366]/10 text-[#25D366] font-black text-[11px] flex items-center justify-center hover:bg-[#25D366]/20 transition-all shrink-0">
+                                💬
+                              </a>
+                              <button onClick={() => handleHistoryDelete(order, historyDate)}
+                                className="flex-1 py-2.5 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white font-black text-[11px] transition-all">
+                                🗑️ حذف من السجل
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </>
+                )}
               </div>
             )}
 
@@ -1310,18 +1287,8 @@ export default function App() {
               </div>
             </section>
             )}
-
-            {/* DEV RESET — testing only */}
-            {FEATURES.dashboard && (
-            <section className="bg-red-950/40 rounded-[2.5rem] p-6 border border-red-500/20">
-              <h3 className="text-red-400 text-[10px] font-black uppercase tracking-[0.2em] mb-3">🧪 أدوات الاختبار</h3>
-              <p className="text-white/30 text-[10px] font-bold mb-4">للاختبار فقط — احذف الطلبات التجريبية وأعد العداد إلى #1</p>
-              <button onClick={handleResetDay}
-                className="w-full py-4 rounded-2xl bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white font-black text-sm transition-all active:scale-95 border border-red-500/30">
-                🗑️ تصفير يوم اليوم — حذف كل الطلبات وإعادة العداد
-              </button>
-            </section>
-            )}
+            
+            {/* BRANDING */}
             <section className="bg-slate-900 rounded-[2.5rem] p-8 border border-white/10 shadow-xl">
               <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em] mb-6">تعديل هوية المطعم</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1369,30 +1336,6 @@ export default function App() {
                   <input type="color" className="w-10 h-10 rounded bg-transparent border-0 cursor-pointer" value={settings.bgColor} onChange={e => updateGlobalSettings("bgColor", e.target.value)} />
                 </div>
 
-                {/* ORDER MODE TOGGLE — Premium only */}
-                {FEATURES.dashboard && (
-                <div className="md:col-span-2 rounded-[1.5rem] border-2 border-orange-500/40 bg-gradient-to-br from-orange-500/10 to-transparent p-5">
-                  <p className="text-white font-black text-sm mb-1 flex items-center gap-2">📲 طريقة استقبال الطلبات</p>
-                  <p className="text-white/40 text-[10px] font-bold mb-4">اختر كيف يصلك الطلب من الزبون</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {[
-                      { val: "both",      icon: "🔗", title: "الاثنين معاً",       desc: "واتساب + لوحة التحكم" },
-                      { val: "whatsapp",  icon: "💬", title: "واتساب فقط",         desc: "الطريقة القديمة" },
-                      { val: "dashboard", icon: "📋", title: "لوحة التحكم فقط",    desc: "بدون واتساب" },
-                    ].map(opt => {
-                      const active = (settings.orderMode || "both") === opt.val;
-                      return (
-                        <button key={opt.val} type="button" onClick={() => updateGlobalSettings("orderMode", opt.val)}
-                          className={`p-4 rounded-2xl border-2 text-right transition-all ${active ? 'border-orange-500 bg-orange-500/20' : 'border-white/10 bg-black/30 hover:border-white/20'}`}>
-                          <div className="text-xl mb-1">{opt.icon}</div>
-                          <p className={`text-[11px] font-black ${active ? 'text-orange-300' : 'text-white/60'}`}>{opt.title}</p>
-                          <p className="text-[9px] text-white/30 font-bold mt-0.5">{opt.desc}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                )}
               </div>
             </section>
 
