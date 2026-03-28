@@ -168,6 +168,7 @@ export default function App() {
   const [autoPrintEnabled, setAutoPrintEnabled] = useState(true);
   const [showMidnightWarning, setShowMidnightWarning] = useState(false);
   const [dayConfirmed, setDayConfirmed] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const [searchOrderNum, setSearchOrderNum] = useState("");
   const [resetUnlocked, setResetUnlocked] = useState(false);
   const [searchResult, setSearchResult] = useState(null); // null | "found" | "notfound"
@@ -698,6 +699,77 @@ export default function App() {
   const finishedOrders = orders.filter(o => o.status === 'finished');
   const finishedTotal  = finishedOrders.reduce((s, o) => s + (o.grandTotal || 0), 0);
 
+  // ── END OF DAY REPORT DATA ──
+  const reportData = (() => {
+    if (!finishedOrders.length) return null;
+    // Top items
+    const itemCount = {};
+    finishedOrders.forEach(o => (o.items || []).forEach(it => {
+      itemCount[it.name] = (itemCount[it.name] || 0) + (it.qty || 1);
+    }));
+    const topItems = Object.entries(itemCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    // Peak hour
+    const hourCount = {};
+    finishedOrders.forEach(o => {
+      if (!o.createdAt) return;
+      const h = new Date(o.createdAt).getHours();
+      hourCount[h] = (hourCount[h] || 0) + 1;
+    });
+    const peakHour = Object.entries(hourCount).sort((a, b) => b[1] - a[1])[0];
+    const fmt = h => { const hh = ((+h - 1 + 24) % 12 + 1); return `${hh}:00 ${+h < 12 ? 'ص' : 'م'} - ${hh}:59 ${+h < 12 ? 'ص' : 'م'}`; };
+    const avgOrder = Math.round(finishedTotal / finishedOrders.length);
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
+    return { topItems, peakHour, avgOrder, timeStr };
+  })();
+
+  const printDayReport = () => {
+    if (!reportData) return;
+    const { topItems, peakHour, avgOrder, timeStr } = reportData;
+    const topItemsHtml = topItems.map(([ name, qty ], i) =>
+      `<div class="row"><span>${i+1}. ${name}</span><span>(${qty})</span></div>`
+    ).join('');
+    const win = window.open('', '_blank', 'width=360,height=600');
+    win.document.write(`<html><head><meta charset="utf-8"/>
+      <style>
+        body{font-family:monospace;padding:20px;direction:rtl;font-size:13px;max-width:320px;margin:0 auto}
+        h2{font-size:15px;font-weight:900;text-align:center;margin:0 0 4px}
+        .sub{text-align:center;font-size:11px;color:#555;margin-bottom:8px}
+        hr{border:none;border-top:1px dashed #333;margin:10px 0}
+        .row{display:flex;justify-content:space-between;padding:2px 0}
+        .big{font-size:22px;font-weight:900;text-align:center;margin:6px 0}
+        .label{font-size:11px;color:#555;text-align:center}
+        .sign{border-bottom:1px solid #333;margin-top:4px;height:24px}
+      </style></head><body>
+      <h2>تقرير المبيعات اليومي</h2>
+      <div class="sub">${settings.restaurantName} — ${settings.restaurantNameAr}</div>
+      <hr/>
+      <div class="row"><span>التاريخ:</span><span>${todayStr}</span></div>
+      <div class="row"><span>الوقت:</span><span>${timeStr}</span></div>
+      <hr/>
+      <div class="big">${finishedTotal.toLocaleString()} د.ع</div>
+      <div class="label">إجمالي المبيعات</div>
+      <div class="row" style="margin-top:8px"><span>عدد الطلبات:</span><span>${finishedOrders.length} طلب</span></div>
+      <div class="row"><span>متوسط الطلب:</span><span>${avgOrder.toLocaleString()} د.ع</span></div>
+      <hr/>
+      <div style="font-weight:900;margin-bottom:4px">الأصناف الأكثر مبيعاً:</div>
+      ${topItemsHtml}
+      <hr/>
+      ${peakHour ? `<div class="row"><span>ساعة الذروة:</span><span>${fmt(peakHour[0])} (${peakHour[1]} طلب)</span></div>` : ''}
+      <hr/>
+      <div style="font-weight:900;margin-bottom:6px">المبلغ المتوقع في الصندوق:</div>
+      <div class="big">${finishedTotal.toLocaleString()} د.ع</div>
+      <hr/>
+      <div class="row"><span>المبلغ الفعلي المعدود:</span></div>
+      <div class="sign"></div>
+      <div style="height:16px"></div>
+      <div class="row"><span>توقيع المدير:</span></div>
+      <div class="sign"></div>
+      <script>window.onload=()=>{window.print();window.close();}<\/script>
+      </body></html>`);
+    win.document.close();
+  };
+
   return (
     <div className="min-h-screen transition-colors duration-500" style={{ backgroundColor: settings.bgColor, fontFamily: 'sans-serif' }}>
       
@@ -880,6 +952,81 @@ export default function App() {
                   className="w-full py-3 rounded-2xl text-white font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all bg-green-600/80 hover:bg-green-600">
                   تأكيد اليوم وحساب المبيعات ✅
                 </button>
+
+                {/* End of Day Report button — only lights up when there are finished orders */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowReport(r => !r)}
+                    disabled={!finishedOrders.length}
+                    className={`flex-1 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 ${finishedOrders.length ? 'bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30' : 'bg-white/5 border border-white/5 text-white/20 cursor-not-allowed'}`}>
+                    📊 {showReport ? 'إخفاء التقرير' : 'تقرير اليوم'}
+                  </button>
+                  {finishedOrders.length > 0 && (
+                    <button onClick={printDayReport}
+                      className="px-5 py-3 rounded-2xl bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 font-black text-[11px] transition-all active:scale-95">
+                      🖨️
+                    </button>
+                  )}
+                </div>
+
+                {/* Report card */}
+                {showReport && reportData && (
+                  <div className="bg-slate-900 rounded-[2rem] border border-amber-500/30 p-6 space-y-4">
+                    <div className="text-center border-b border-white/10 pb-4">
+                      <p className="text-amber-400 font-black text-[11px] uppercase tracking-widest mb-1">تقرير المبيعات اليومي</p>
+                      <p className="text-white font-black text-2xl">{finishedTotal.toLocaleString()} <span className="text-sm">د.ع</span></p>
+                      <p className="text-white/30 text-[10px] font-bold mt-1">{todayStr} — {reportData.timeStr}</p>
+                    </div>
+
+                    {/* Stats grid */}
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: "عدد الطلبات", value: finishedOrders.length },
+                        { label: "متوسط الطلب", value: reportData.avgOrder.toLocaleString() + " د.ع" },
+                        { label: "المتوقع بالصندوق", value: finishedTotal.toLocaleString() + " د.ع" },
+                      ].map(s => (
+                        <div key={s.label} className="bg-black/30 rounded-2xl p-3 text-center">
+                          <p className="text-white font-black text-sm leading-tight">{s.value}</p>
+                          <p className="text-white/30 text-[9px] font-bold mt-1">{s.label}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Peak hour */}
+                    {reportData.peakHour && (
+                      <div className="bg-black/30 rounded-2xl px-4 py-3 flex justify-between items-center">
+                        <span className="text-white/50 text-[11px] font-bold">⏰ ساعة الذروة</span>
+                        <span className="text-amber-400 font-black text-[11px]">
+                          {(() => { const h = +reportData.peakHour[0]; const hh = (h % 12) || 12; return `${hh}:00 ${h < 12 ? 'ص' : 'م'} — ${hh}:59 ${h < 12 ? 'ص' : 'م'}`; })()}
+                          <span className="text-white/30 mr-1">({reportData.peakHour[1]} طلب)</span>
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Top items */}
+                    <div className="bg-black/30 rounded-2xl p-4">
+                      <p className="text-white/50 text-[10px] font-black uppercase tracking-widest mb-3">الأصناف الأكثر مبيعاً</p>
+                      <div className="space-y-2">
+                        {reportData.topItems.map(([name, qty], i) => (
+                          <div key={name} className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] font-black text-amber-500/70 w-4">{i + 1}.</span>
+                              <span className="text-white text-[11px] font-bold">{name}</span>
+                            </div>
+                            <span className="text-white/50 text-[11px] font-black">{qty} حبة</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Cash drawer line */}
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4">
+                      <p className="text-amber-300/80 text-[10px] font-black uppercase tracking-widest mb-2">المبلغ الفعلي المعدود</p>
+                      <div className="border-b-2 border-dashed border-amber-500/30 h-8" />
+                      <p className="text-white/20 text-[9px] font-bold mt-2">اكتب الرقم الفعلي عند طباعة التقرير</p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Print toggle */}
                 <div className="flex items-center justify-between bg-slate-900 rounded-2xl px-4 py-3 border border-white/5">
