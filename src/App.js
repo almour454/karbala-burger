@@ -1274,7 +1274,8 @@ export default function App() {
                   <input type="color" className="w-10 h-10 rounded bg-transparent border-0 cursor-pointer" value={settings.bgColor} onChange={e => updateGlobalSettings("bgColor", e.target.value)} />
                 </div>
 
-                {/* ORDER MODE TOGGLE */}
+                {/* ORDER MODE TOGGLE — Premium only */}
+                {FEATURES.dashboard && (
                 <div className="md:col-span-2 rounded-[1.5rem] border-2 border-orange-500/40 bg-gradient-to-br from-orange-500/10 to-transparent p-5">
                   <p className="text-white font-black text-sm mb-1 flex items-center gap-2">📲 طريقة استقبال الطلبات</p>
                   <p className="text-white/40 text-[10px] font-bold mb-4">اختر كيف يصلك الطلب من الزبون</p>
@@ -1296,6 +1297,7 @@ export default function App() {
                     })}
                   </div>
                 </div>
+                )}
               </div>
             </section>
 
