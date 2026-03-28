@@ -12,8 +12,7 @@ import {
   updateDoc,
   deleteDoc,
   query,
-  orderBy,
-  runTransaction
+  orderBy
 } from "firebase/firestore";
 import { 
   getAuth, 
@@ -510,16 +509,10 @@ export default function App() {
 
   const saveOrderToFirebase = async () => {
     const d = getDateStr();
-    const counterRef = getOrderCounterDoc(d);
     const ordersCol = getOrdersCollection(d);
 
-    // Atomically get+increment the daily order counter
-    let orderNumber = 1;
-    await runTransaction(db, async (tx) => {
-      const counterSnap = await tx.get(counterRef);
-      orderNumber = counterSnap.exists() ? (counterSnap.data().count || 0) + 1 : 1;
-      tx.set(counterRef, { count: orderNumber }, { merge: true });
-    });
+    // Order number = current orders count + 1 (no transaction needed)
+    const orderNumber = orders.filter(o => o.dateStr === d).length + 1;
 
     await addDoc(ordersCol, {
       orderNumber,
