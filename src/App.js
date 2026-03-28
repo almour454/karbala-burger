@@ -13,7 +13,8 @@ import {
   deleteDoc,
   query,
   orderBy,
-  runTransaction
+  runTransaction,
+  increment
 } from "firebase/firestore";
 import { 
   getAuth, 
@@ -512,14 +513,14 @@ export default function App() {
     const counterRef = getOrderCounterDoc(d);
     const ordersCol = getOrdersCollection(d);
 
-    // Atomically get+increment the daily order counter
-    let orderNumber = 1;
-    await runTransaction(db, async (tx) => {
-      const counterSnap = await tx.get(counterRef);
-      orderNumber = counterSnap.exists() ? (counterSnap.data().count || 0) + 1 : 1;
-      tx.set(counterRef, { count: orderNumber }, { merge: true });
-    });
+    // Step 1 — atomic increment (works perfectly on mobile, no transaction needed)
+    await setDoc(counterRef, { count: increment(1) }, { merge: true });
 
+    // Step 2 — read the new count
+    const counterSnap = await getDoc(counterRef);
+    const orderNumber = counterSnap.exists() ? (counterSnap.data().count || 1) : 1;
+
+    // Step 3 — save the order
     await addDoc(ordersCol, {
       orderNumber,
       customerName,
@@ -596,14 +597,13 @@ export default function App() {
   };
 
   const sendDashboardOnly = async () => {
-    if (!checkOnline()) return;
     setOrderSubmitting(true);
     setOrderError(null);
     try {
       const orderNum = await saveOrderToFirebase();
       clearAfterOrder(orderNum);
     } catch (e) {
-      console.error(e);
+      console.error("Order failed:", e?.code, e?.message, e);
       setOrderError("failed");
       setOrderSubmitting(false);
     }
