@@ -597,6 +597,20 @@ export default function App() {
     clearAfterOrder(orderNum);
   };
 
+  const sendDashboardOnly = async () => {
+    if (!checkOnline()) return;
+    setOrderSubmitting(true);
+    setOrderError(null);
+    try {
+      const orderNum = await saveOrderToFirebase();
+      clearAfterOrder(orderNum);
+    } catch (e) {
+      console.error(e);
+      setOrderError("failed");
+      setOrderSubmitting(false);
+    }
+  };
+
   const buildReceiptHtml = (order) => {
     const time = order.createdAt
       ? new Date(order.createdAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })
@@ -1754,7 +1768,7 @@ export default function App() {
             </div>
           )}
 
-          {/* MIDNIGHT WARNING POPUP  */}
+          {/* MIDNIGHT WARNING POPUP */}
           {showMidnightWarning && (
             <div className="fixed inset-0 z-[4000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6">
               <div className="bg-slate-900 border border-orange-500/40 rounded-[3rem] p-10 text-center max-w-sm w-full shadow-2xl animate-slide-up" dir="rtl">
