@@ -1754,7 +1754,7 @@ export default function App() {
             </div>
           )}
 
-          {/* MIDNIGHT WARNING POPUP */}
+          {/* MIDNIGHT WARNING POPUP  */}
           {showMidnightWarning && (
             <div className="fixed inset-0 z-[4000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6">
               <div className="bg-slate-900 border border-orange-500/40 rounded-[3rem] p-10 text-center max-w-sm w-full shadow-2xl animate-slide-up" dir="rtl">
