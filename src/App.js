@@ -13,8 +13,7 @@ import {
   deleteDoc,
   query,
   orderBy,
-  runTransaction,
-  increment
+  runTransaction
 } from "firebase/firestore";
 import { 
   getAuth, 
@@ -201,7 +200,7 @@ export default function App() {
         if (token) await signInWithCustomToken(auth, token);
         else await signInAnonymously(auth);
       } catch (e) {
-        console.error("Auth init failed:", e);
+        setUser({ uid: 'guest-' + Math.random().toString(36).substr(2, 9) });
       }
     };
     initAuth();
@@ -513,28 +512,14 @@ export default function App() {
     const counterRef = getOrderCounterDoc(d);
     const ordersCol = getOrdersCollection(d);
 
-    // Ensure we have a real Firebase auth user before writing
-    let currentUser = auth.currentUser;
-    if (!currentUser) {
-      // Wait up to 5 seconds for auth to initialize
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("Auth timeout")), 5000);
-        const unsub = auth.onAuthStateChanged(u => {
-          if (u) { clearTimeout(timeout); unsub(); resolve(u); }
-        });
-      });
-      currentUser = auth.currentUser;
-    }
-    if (!currentUser) throw new Error("No auth user");
+    // Atomically get+increment the daily order counter
+    let orderNumber = 1;
+    await runTransaction(db, async (tx) => {
+      const counterSnap = await tx.get(counterRef);
+      orderNumber = counterSnap.exists() ? (counterSnap.data().count || 0) + 1 : 1;
+      tx.set(counterRef, { count: orderNumber }, { merge: true });
+    });
 
-    // Atomic increment counter
-    await setDoc(counterRef, { count: increment(1) }, { merge: true });
-
-    // Read new count
-    const counterSnap = await getDoc(counterRef);
-    const orderNumber = counterSnap.exists() ? (counterSnap.data().count || 1) : 1;
-
-    // Save order
     await addDoc(ordersCol, {
       orderNumber,
       customerName,
@@ -611,13 +596,14 @@ export default function App() {
   };
 
   const sendDashboardOnly = async () => {
+    if (!checkOnline()) return;
     setOrderSubmitting(true);
     setOrderError(null);
     try {
       const orderNum = await saveOrderToFirebase();
       clearAfterOrder(orderNum);
     } catch (e) {
-      console.error("Order failed:", e?.code, e?.message, e);
+      console.error(e);
       setOrderError("failed");
       setOrderSubmitting(false);
     }
@@ -1468,9 +1454,18 @@ export default function App() {
         )
       ) : (
         <div className="pb-40">
+          {/* Loading skeleton — shown until Firebase settings arrive */}
+          {!settingsLoaded && (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+              <div className="w-16 h-16 border-4 border-slate-200 border-t-orange-500 rounded-full animate-spin" />
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">جارٍ التحميل...</p>
+            </div>
+          )}
+          {/* CUSTOMER CONTENT — only renders after settings load */}
+          {settingsLoaded && (
           <div>
           {/* CUSTOMER HEADER */}
-          <header className={`pt-10 pb-8 px-6 text-center animate-fade-in transition-opacity duration-500 ${settingsLoaded ? 'opacity-100' : 'opacity-0'}`}>
+          <header className="pt-10 pb-8 px-6 text-center animate-fade-in">
              <h1 className="text-6xl font-black italic uppercase tracking-tighter leading-tight text-slate-950">{settings.restaurantName}</h1>
              <h2 className="text-4xl font-black text-slate-800/40 mt-1">{settings.restaurantNameAr}</h2>
              <div className="mt-8 flex flex-col items-center gap-3">
@@ -1754,7 +1749,7 @@ export default function App() {
                 {(() => {
                   // Basic bundle always forces WhatsApp-only
                   const mode = FEATURES.dashboard ? (settings.orderMode || "both") : "whatsapp";
-                  const disabled = !address || !customerName || !customerPhone || orderSubmitting;
+                  const disabled = !address || !customerName || !customerPhone || orderSubmitting || !user;
                   const loadingLabel = <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin inline-block"></span>جارٍ الإرسال...</span>;
                   if (mode === "whatsapp") return (
                     <button disabled={disabled} onClick={() => { setOrderError(null); sendWhatsApp(); }}
@@ -1826,6 +1821,7 @@ export default function App() {
             </div>
           )}
           </div>
+          )} {/* end settingsLoaded */}
         </div>
       )}
 
