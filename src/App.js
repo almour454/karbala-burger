@@ -768,6 +768,7 @@ export default function App() {
 
             {/* ── ORDERS TAB ── */}
             {FEATURES.dashboard && adminTab === "orders" && (
+              <>
               <div className="space-y-4">
 
                 {/* 🔍 SEARCH BY ORDER NUMBER */}
@@ -1088,7 +1089,7 @@ export default function App() {
                   </div>
                 )}
               </div>
-            </div>
+            </>
             )}
 
             {/* ── HISTORY TAB ── */}
