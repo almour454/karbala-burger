@@ -563,12 +563,9 @@ export default function App() {
   };
 
   // Returns false and sets error if offline
+  // Note: navigator.onLine is unreliable on mobile/cellular — we skip it
+  // and let Firebase itself return an error if there's truly no connection
   const checkOnline = () => {
-    if (!navigator.onLine) {
-      setOrderError("offline");
-      setOrderSubmitting(false);
-      return false;
-    }
     return true;
   };
 
@@ -1099,7 +1096,25 @@ export default function App() {
 
                 {/* Date picker */}
                 <div className="bg-slate-900 rounded-[2rem] p-6 border border-white/5">
-                  <p className="text-white/50 text-[11px] font-bold mb-3">اختر تاريخاً لعرض طلباته</p>
+                  <p className="text-white/50 text-[11px] font-bold mb-3">اختر يوماً لعرض طلباته</p>
+                  {/* Quick day buttons — last 7 days */}
+                  <div className="flex gap-2 overflow-x-auto no-scrollbar mb-3">
+                    {Array.from({ length: 7 }, (_, i) => {
+                      const d = new Date();
+                      d.setDate(d.getDate() - i);
+                      const str = d.toLocaleDateString('en-CA');
+                      const label = i === 0 ? 'اليوم' : i === 1 ? 'أمس' : d.toLocaleDateString('ar-IQ', { weekday: 'short' });
+                      const active = historyDate === str;
+                      return (
+                        <button key={str} onClick={() => { setHistoryDate(str); setHistorySearchNum(""); loadHistoryOrders(str); }}
+                          className={`shrink-0 px-4 py-2.5 rounded-xl text-[11px] font-black transition-all border ${active ? 'text-white border-transparent' : 'bg-black/30 text-white/40 border-white/10 hover:border-white/20'}`}
+                          style={active ? { backgroundColor: settings.primaryColor } : {}}>
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Calendar fallback for older dates */}
                   <div className="flex gap-2">
                     <input
                       type="date"
@@ -1110,7 +1125,7 @@ export default function App() {
                         setHistorySearchNum("");
                         if (e.target.value) loadHistoryOrders(e.target.value);
                       }}
-                      className="flex-1 bg-black/50 border border-white/10 p-4 rounded-xl text-white text-sm font-bold outline-none focus:border-orange-500"
+                      className="flex-1 bg-black/50 border border-white/10 p-3 rounded-xl text-white/50 text-sm font-bold outline-none focus:border-orange-500"
                     />
                     {historyDate && (
                       <button onClick={() => { setHistoryDate(""); setHistoryOrders([]); setHistorySearchNum(""); }}
