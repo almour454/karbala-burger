@@ -77,10 +77,10 @@ const getDateStr = () => new Date().toLocaleDateString('en-CA');
 // ============================================================
 // 🚩 BUNDLE — change one word to switch plans
 //
-//   "basic"    → WhatsApp only      (400,000 IQD)
-//   "premium"  → Full POS Dashboard (500,000 IQD)
+//   "basic"    = WhatsApp only      (400,000 IQD)
+//   "premium"  = Full POS Dashboard (500,000 IQD)
 //
-const BUNDLE = "basic";
+const BUNDLE = "premium";
 // ============================================================
 
 // Shorthand used throughout the code — don't touch this line
@@ -365,6 +365,8 @@ export default function App() {
     };
     checkAutoConfirm();
   }, [isUnlocked]);
+
+  const handleAuthSubmit = async (e) => {
     e.preventDefault();
     if (!ownerEmail.trim() || !ownerPassword) return;
     setAuthError("");
