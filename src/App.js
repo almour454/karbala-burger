@@ -60,7 +60,7 @@ const firebaseConfig =
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-// Note: offline queueing is prevented by checking navigator.onLine before every write.
+// Note: offline handling is done via Firebase error catching, not navigator.onLine
 
 const appId =
   typeof window !== "undefined" && window.__app_id
@@ -137,6 +137,7 @@ export default function App() {
     printCopies: 2,
     dayCloseHour: 0
   });
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const [cart, setCart] = useState({});
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -246,6 +247,7 @@ export default function App() {
           if (Array.isArray(data.categories)) setCategories(data.categories);
           setSettings(prev => ({ ...prev, ...data }));
         }
+        setSettingsLoaded(true);
       },
       (err) => {
         console.error(err);
@@ -563,11 +565,9 @@ export default function App() {
   };
 
   // Returns false and sets error if offline
-  // Note: navigator.onLine is unreliable on mobile/cellular — we skip it
-  // and let Firebase itself return an error if there's truly no connection
-  const checkOnline = () => {
-    return true;
-  };
+  // navigator.onLine is unreliable on mobile/cellular — removed.
+  // Firebase itself will throw if there's truly no connection.
+  const checkOnline = () => true;
 
   const sendWhatsApp = async () => {
     if (!checkOnline()) return;
@@ -1096,25 +1096,7 @@ export default function App() {
 
                 {/* Date picker */}
                 <div className="bg-slate-900 rounded-[2rem] p-6 border border-white/5">
-                  <p className="text-white/50 text-[11px] font-bold mb-3">اختر يوماً لعرض طلباته</p>
-                  {/* Quick day buttons — last 7 days */}
-                  <div className="flex gap-2 overflow-x-auto no-scrollbar mb-3">
-                    {Array.from({ length: 7 }, (_, i) => {
-                      const d = new Date();
-                      d.setDate(d.getDate() - i);
-                      const str = d.toLocaleDateString('en-CA');
-                      const label = i === 0 ? 'اليوم' : i === 1 ? 'أمس' : d.toLocaleDateString('ar-IQ', { weekday: 'short' });
-                      const active = historyDate === str;
-                      return (
-                        <button key={str} onClick={() => { setHistoryDate(str); setHistorySearchNum(""); loadHistoryOrders(str); }}
-                          className={`shrink-0 px-4 py-2.5 rounded-xl text-[11px] font-black transition-all border ${active ? 'text-white border-transparent' : 'bg-black/30 text-white/40 border-white/10 hover:border-white/20'}`}
-                          style={active ? { backgroundColor: settings.primaryColor } : {}}>
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {/* Calendar fallback for older dates */}
+                  <p className="text-white/50 text-[11px] font-bold mb-3">اختر تاريخاً لعرض طلباته</p>
                   <div className="flex gap-2">
                     <input
                       type="date"
@@ -1125,7 +1107,7 @@ export default function App() {
                         setHistorySearchNum("");
                         if (e.target.value) loadHistoryOrders(e.target.value);
                       }}
-                      className="flex-1 bg-black/50 border border-white/10 p-3 rounded-xl text-white/50 text-sm font-bold outline-none focus:border-orange-500"
+                      className="flex-1 bg-black/50 border border-white/10 p-4 rounded-xl text-white text-sm font-bold outline-none focus:border-orange-500"
                     />
                     {historyDate && (
                       <button onClick={() => { setHistoryDate(""); setHistoryOrders([]); setHistorySearchNum(""); }}
@@ -1472,8 +1454,8 @@ export default function App() {
         )
       ) : (
         <div className="pb-40">
-          {/* CUSTOMER HEADER */}
-          <header className="pt-10 pb-8 px-6 text-center animate-fade-in">
+          {/* CUSTOMER HEADER — hidden until Firebase settings load to prevent flash */}
+          <header className={`pt-10 pb-8 px-6 text-center animate-fade-in transition-opacity duration-300 ${settingsLoaded ? 'opacity-100' : 'opacity-0'}`}>
              <h1 className="text-6xl font-black italic uppercase tracking-tighter leading-tight text-slate-950">{settings.restaurantName}</h1>
              <h2 className="text-4xl font-black text-slate-800/40 mt-1">{settings.restaurantNameAr}</h2>
              <div className="mt-8 flex flex-col items-center gap-3">
