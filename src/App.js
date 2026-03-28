@@ -201,7 +201,15 @@ export default function App() {
         if (token) await signInWithCustomToken(auth, token);
         else await signInAnonymously(auth);
       } catch (e) {
-        setUser({ uid: 'guest-' + Math.random().toString(36).substr(2, 9) });
+        console.error("Auth init failed:", e);
+        // Retry anonymous sign in once after a short delay
+        setTimeout(async () => {
+          try {
+            await signInAnonymously(auth);
+          } catch (e2) {
+            console.error("Auth retry failed:", e2);
+          }
+        }, 2000);
       }
     };
     initAuth();
@@ -513,14 +521,28 @@ export default function App() {
     const counterRef = getOrderCounterDoc(d);
     const ordersCol = getOrdersCollection(d);
 
-    // Step 1 — atomic increment (works perfectly on mobile, no transaction needed)
+    // Ensure we have a real Firebase auth user before writing
+    let currentUser = auth.currentUser;
+    if (!currentUser) {
+      // Wait up to 5 seconds for auth to initialize
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("Auth timeout")), 5000);
+        const unsub = auth.onAuthStateChanged(u => {
+          if (u) { clearTimeout(timeout); unsub(); resolve(u); }
+        });
+      });
+      currentUser = auth.currentUser;
+    }
+    if (!currentUser) throw new Error("No auth user");
+
+    // Atomic increment counter
     await setDoc(counterRef, { count: increment(1) }, { merge: true });
 
-    // Step 2 — read the new count
+    // Read new count
     const counterSnap = await getDoc(counterRef);
     const orderNumber = counterSnap.exists() ? (counterSnap.data().count || 1) : 1;
 
-    // Step 3 — save the order
+    // Save order
     await addDoc(ordersCol, {
       orderNumber,
       customerName,
