@@ -1454,8 +1454,18 @@ export default function App() {
         )
       ) : (
         <div className="pb-40">
-          {/* CUSTOMER HEADER — hidden until Firebase settings load to prevent flash */}
-          <header className={`pt-10 pb-8 px-6 text-center animate-fade-in transition-opacity duration-300 ${settingsLoaded ? 'opacity-100' : 'opacity-0'}`}>
+          {/* Loading skeleton — shown until Firebase settings arrive */}
+          {!settingsLoaded && (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+              <div className="w-16 h-16 border-4 border-slate-200 border-t-orange-500 rounded-full animate-spin" />
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">جارٍ التحميل...</p>
+            </div>
+          )}
+          {/* CUSTOMER CONTENT — only renders after settings load */}
+          {settingsLoaded && (
+          <div>
+          {/* CUSTOMER HEADER */}
+          <header className="pt-10 pb-8 px-6 text-center animate-fade-in">
              <h1 className="text-6xl font-black italic uppercase tracking-tighter leading-tight text-slate-950">{settings.restaurantName}</h1>
              <h2 className="text-4xl font-black text-slate-800/40 mt-1">{settings.restaurantNameAr}</h2>
              <div className="mt-8 flex flex-col items-center gap-3">
@@ -1810,6 +1820,8 @@ export default function App() {
               </div>
             </div>
           )}
+          </div>
+          )} {/* end settingsLoaded */}
         </div>
       )}
 
