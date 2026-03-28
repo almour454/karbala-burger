@@ -1,39 +1,26 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function ownerDocPath(appId) {
-      return /databases/$(database)/documents/artifacts/$(appId)/private/data/admin/owner;
-    }
 
-    function ownerDocExists(appId) {
-      return exists(ownerDocPath(appId));
-    }
-
-    function isOwner(appId) {
-      return request.auth != null
-        && ownerDocExists(appId)
-        && get(ownerDocPath(appId)).data.uid == request.auth.uid;
-    }
-
-    match /artifacts/{appId}/public/data/menu/{docId} {
+    // Public data — menu, settings — anyone can read, only auth can write
+    match /artifacts/{appId}/public/{document=**} {
       allow read: if true;
-      allow write: if isOwner(appId);
+      allow write: if request.auth != null;
     }
 
-    match /artifacts/{appId}/public/data/settings/{docId} {
-      allow read: if true;
-      allow write: if isOwner(appId);
+    // Orders — anonymous users CAN write (they have auth.uid)
+    match /artifacts/{appId}/private/data/orders/{dateStr}/items/{orderId} {
+      allow read, write: if request.auth != null;
     }
 
-    match /artifacts/{appId}/private/data/admin/owner {
-      allow read: if request.auth != null
-        && (!ownerDocExists(appId) || isOwner(appId));
-      allow create: if request.auth != null && !ownerDocExists(appId);
-      allow update, delete: if isOwner(appId);
+    // Order counter + confirmed meta
+    match /artifacts/{appId}/private/data/orders/{dateStr}/meta/{metaId} {
+      allow read, write: if request.auth != null;
     }
 
-    match /{document=**} {
-      allow read, write: if false;
+    // Admin — owner only
+    match /artifacts/{appId}/private/data/admin/{document=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }
