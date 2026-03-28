@@ -71,7 +71,8 @@ const getMenuCollection = () => collection(db, 'artifacts', appId, 'public', 'da
 const getSettingsDoc = () => doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
 const getOwnerDoc = () => doc(db, 'artifacts', appId, 'private', 'data', 'admin', 'owner');
 const getOrdersCollection = (dateStr) => collection(db, 'artifacts', appId, 'private', 'data', 'orders', dateStr, 'items');
-const getOrderCounterDoc = (dateStr) => doc(db, 'artifacts', appId, 'private', 'data', 'orders', dateStr, 'meta', 'counter');
+// Counter lives in public so anonymous customers can read+write it during the transaction
+const getOrderCounterDoc = (dateStr) => doc(db, 'artifacts', appId, 'public', 'data', 'counters', dateStr);
 const getDateStr = () => new Date().toLocaleDateString('en-CA');
 
 // ============================================================
