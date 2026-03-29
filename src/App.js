@@ -1473,11 +1473,11 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-4">
                   {/* Logo preview */}
-                  <div className="shrink-0 w-20 h-20 rounded-2xl overflow-hidden border border-white/10 flex items-center justify-center"
-                    style={{ background: `linear-gradient(135deg, ${settings.primaryColor}40, #1e293b)` }}>
+                  <div className="shrink-0 w-20 h-20 flex items-center justify-center"
+                    style={{ filter: `drop-shadow(0 8px 16px ${settings.primaryColor}40)` }}>
                     {settings.logoUrl
-                      ? <img src={settings.logoUrl} alt="logo" className="w-full h-full object-cover" onError={e => e.target.style.display='none'} />
-                      : <span className="text-3xl">🍔</span>
+                      ? <img src={settings.logoUrl} alt="logo" className="w-full h-full object-contain" onError={e => e.target.style.display='none'} />
+                      : <span className="text-4xl">🍔</span>
                     }
                   </div>
                   <div className="flex-1">
@@ -1747,30 +1747,22 @@ export default function App() {
              {settings.logoUrl ? (
                <div className="flex justify-center mb-6">
                  <div className="relative">
-                   <div className="w-28 h-28 rounded-[2rem] overflow-hidden shadow-2xl ring-4 ring-white border border-black/10"
-                     style={{ boxShadow: `0 20px 60px ${settings.primaryColor}40` }}>
+                   <div className="w-32 h-32 overflow-hidden"
+                     style={{ filter: `drop-shadow(0 20px 40px ${settings.primaryColor}50)` }}>
                      <img src={settings.logoUrl} alt={settings.restaurantName}
-                       className="w-full h-full object-cover"
+                       className="w-full h-full object-contain"
                        onError={e => e.target.style.display='none'} />
-                   </div>
-                   <div className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center shadow-lg"
-                     style={{ backgroundColor: settings.primaryColor }}>
-                     <span className="text-white text-[10px]">✓</span>
                    </div>
                  </div>
                </div>
              ) : (
                <div className="flex justify-center mb-6">
-                 <div className="relative w-28 h-28 rounded-[2rem] flex items-center justify-center shadow-2xl ring-4 ring-white border border-black/5"
+                 <div className="relative w-28 h-28 rounded-[2rem] flex items-center justify-center"
                    style={{
                      background: `linear-gradient(135deg, ${settings.primaryColor} 0%, #7c2d12 100%)`,
                      boxShadow: `0 20px 60px ${settings.primaryColor}50`
                    }}>
                    <span className="text-5xl select-none">🍔</span>
-                   <div className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center shadow-lg"
-                     style={{ backgroundColor: settings.primaryColor }}>
-                     <span className="text-white text-[10px]">✓</span>
-                   </div>
                  </div>
                </div>
              )}
