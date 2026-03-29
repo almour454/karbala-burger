@@ -84,6 +84,13 @@ const getDateStr = () => new Date().toLocaleDateString('en-CA');
 const BUNDLE = "premium";
 // ============================================================
 
+// ============================================================
+// 🔒 BRAND LOCK — set to false when setting up a new client
+//    true  = name/colors/logo locked (client cannot change)
+//    false = everything editable (developer setup mode)
+const LOCKED = true;
+// ============================================================
+
 // Shorthand used throughout the code — don't touch this line
 const FEATURES = {
   dashboard:    BUNDLE === "premium",
@@ -136,7 +143,8 @@ export default function App() {
     contactPhone3: "",
     autoGreyHours: 5,
     printCopies: 2,
-    dayCloseHour: 0
+    dayCloseHour: 0,
+    logoUrl: ""
   });
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -1448,16 +1456,92 @@ export default function App() {
             
             {/* BRANDING */}
             <section className="bg-slate-900 rounded-[2.5rem] p-8 border border-white/10 shadow-xl">
-              <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em] mb-6">تعديل هوية المطعم</h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em]">تعديل هوية المطعم</h3>
+                {LOCKED && (
+                  <span className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl text-[9px] font-black text-white/40 uppercase tracking-wide">
+                    🔒 الهوية محمية
+                  </span>
+                )}
+              </div>
+
+              {/* LOGO SECTION — always visible, locked when LOCKED=true */}
+              <div className={`mb-6 p-5 rounded-2xl border ${LOCKED ? 'border-white/5 opacity-50 pointer-events-none select-none' : 'border-orange-500/20 bg-orange-500/5'}`}>
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-orange-400 text-[10px] font-black uppercase tracking-widest">لوغو المطعم</span>
+                  {LOCKED && <span className="text-[9px] text-white/30 font-bold">🔒 للتعديل تواصل مع المطور</span>}
+                </div>
+                <div className="flex items-center gap-4">
+                  {/* Logo preview */}
+                  <div className="shrink-0 w-20 h-20 rounded-2xl overflow-hidden border border-white/10 flex items-center justify-center"
+                    style={{ background: `linear-gradient(135deg, ${settings.primaryColor}40, #1e293b)` }}>
+                    {settings.logoUrl
+                      ? <img src={settings.logoUrl} alt="logo" className="w-full h-full object-cover" onError={e => e.target.style.display='none'} />
+                      : <span className="text-3xl">🍔</span>
+                    }
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      className="w-full bg-black/40 border border-white/10 p-3 rounded-xl text-white text-xs font-bold outline-none focus:border-orange-500"
+                      placeholder="ألصق رابط اللوغو (URL صورة)"
+                      value={settings.logoUrl || ""}
+                      onChange={e => updateGlobalSettings("logoUrl", e.target.value)}
+                      disabled={LOCKED}
+                    />
+                    <p className="text-white/20 text-[9px] font-bold mt-1.5">ارفع الصورة على imgur.com أو imgbb.com ثم ألصق الرابط هنا</p>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="اسم المطعم EN" value={settings.restaurantName} onChange={e => updateGlobalSettings("restaurantName", e.target.value)} />
-                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="اسم المطعم AR" value={settings.restaurantNameAr} onChange={e => updateGlobalSettings("restaurantNameAr", e.target.value)} />
-                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="واتساب (964...)" value={settings.whatsapp} onChange={e => updateGlobalSettings("whatsapp", e.target.value)} />
-                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="أوقات العمل" value={settings.openingHours} onChange={e => updateGlobalSettings("openingHours", e.target.value)} />
-                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2" placeholder="وصف الموقع / العنوان" value={settings.locationDesc} onChange={e => updateGlobalSettings("locationDesc", e.target.value)} />
-                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="Facebook URL" value={settings.facebookUrl || ""} onChange={e => updateGlobalSettings("facebookUrl", e.target.value)} />
-                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm" placeholder="Instagram URL" value={settings.instagramUrl || ""} onChange={e => updateGlobalSettings("instagramUrl", e.target.value)} />
-                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2" placeholder="TikTok URL" value={settings.tiktokUrl || ""} onChange={e => updateGlobalSettings("tiktokUrl", e.target.value)} />
+
+                {/* LOCKED: Restaurant name EN */}
+                <div className={`relative ${LOCKED ? 'opacity-50 pointer-events-none select-none' : ''}`}>
+                  <input className="w-full bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm"
+                    placeholder="اسم المطعم EN"
+                    value={settings.restaurantName}
+                    onChange={e => updateGlobalSettings("restaurantName", e.target.value)}
+                    disabled={LOCKED} />
+                  {LOCKED && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 text-xs">🔒</span>}
+                </div>
+
+                {/* LOCKED: Restaurant name AR */}
+                <div className={`relative ${LOCKED ? 'opacity-50 pointer-events-none select-none' : ''}`}>
+                  <input className="w-full bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm"
+                    placeholder="اسم المطعم AR"
+                    value={settings.restaurantNameAr}
+                    onChange={e => updateGlobalSettings("restaurantNameAr", e.target.value)}
+                    disabled={LOCKED} />
+                  {LOCKED && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 text-xs">🔒</span>}
+                </div>
+
+                {/* FREE: WhatsApp */}
+                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm"
+                  placeholder="واتساب (964...)" value={settings.whatsapp}
+                  onChange={e => updateGlobalSettings("whatsapp", e.target.value)} />
+
+                {/* FREE: Opening hours */}
+                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm"
+                  placeholder="أوقات العمل" value={settings.openingHours}
+                  onChange={e => updateGlobalSettings("openingHours", e.target.value)} />
+
+                {/* FREE: Location */}
+                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2"
+                  placeholder="وصف الموقع / العنوان" value={settings.locationDesc}
+                  onChange={e => updateGlobalSettings("locationDesc", e.target.value)} />
+
+                {/* FREE: Social */}
+                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm"
+                  placeholder="Facebook URL" value={settings.facebookUrl || ""}
+                  onChange={e => updateGlobalSettings("facebookUrl", e.target.value)} />
+                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm"
+                  placeholder="Instagram URL" value={settings.instagramUrl || ""}
+                  onChange={e => updateGlobalSettings("instagramUrl", e.target.value)} />
+                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2"
+                  placeholder="TikTok URL" value={settings.tiktokUrl || ""}
+                  onChange={e => updateGlobalSettings("tiktokUrl", e.target.value)} />
+
+                {/* FREE: Phone numbers */}
                 <div className="md:col-span-2 rounded-[1.5rem] border-2 border-orange-500/50 bg-gradient-to-br from-orange-500/15 to-transparent p-5 space-y-3">
                   <p className="text-white font-black text-sm flex items-center gap-2" dir="rtl">
                     <span aria-hidden="true">📞</span>
@@ -1478,21 +1562,54 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-                <textarea className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2 h-24 resize-none" placeholder="رسالة تظهر عند متابعة الطلب" value={settings.checkoutNote || ""} onChange={e => updateGlobalSettings("checkoutNote", e.target.value)} />
-                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2" placeholder="عنوان قسم الخصومات (مثال: عروض نارية 🔥)" value={settings.dealsSectionTitle || ""} onChange={e => updateGlobalSettings("dealsSectionTitle", e.target.value)} />
-                <textarea className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2 h-20 resize-none" placeholder="ملاحظة بجانب السعر (توصيل، مناطق، إلخ)" value={settings.cartDeliveryNote || ""} onChange={e => updateGlobalSettings("cartDeliveryNote", e.target.value)} />
+
+                {/* FREE: Notes */}
+                <textarea className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2 h-24 resize-none"
+                  placeholder="رسالة تظهر عند متابعة الطلب" value={settings.checkoutNote || ""}
+                  onChange={e => updateGlobalSettings("checkoutNote", e.target.value)} />
+                <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2"
+                  placeholder="عنوان قسم الخصومات (مثال: عروض نارية 🔥)" value={settings.dealsSectionTitle || ""}
+                  onChange={e => updateGlobalSettings("dealsSectionTitle", e.target.value)} />
+                <textarea className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm md:col-span-2 h-20 resize-none"
+                  placeholder="ملاحظة بجانب السعر (توصيل، مناطق، إلخ)" value={settings.cartDeliveryNote || ""}
+                  onChange={e => updateGlobalSettings("cartDeliveryNote", e.target.value)} />
+
+                {/* FREE: Delivery fee */}
                 <div className="bg-black/40 border border-white/5 p-4 rounded-xl md:col-span-2">
                   <p className="text-white text-[10px] font-bold mb-2">رسوم التوصيل (د.ع)</p>
-                  <input className="w-full bg-black/50 border border-white/10 p-4 rounded-xl text-white text-sm" type="number" min="0" step="1" placeholder="0 = بدون رسوم — تُضاف تلقائيًا للإجمالي" value={Number(settings.deliveryFee) || 0} onChange={e => updateGlobalSettings("deliveryFee", Math.max(0, Number(e.target.value) || 0))} />
+                  <input className="w-full bg-black/50 border border-white/10 p-4 rounded-xl text-white text-sm"
+                    type="number" min="0" step="1"
+                    placeholder="0 = بدون رسوم — تُضاف تلقائيًا للإجمالي"
+                    value={Number(settings.deliveryFee) || 0}
+                    onChange={e => updateGlobalSettings("deliveryFee", Math.max(0, Number(e.target.value) || 0))} />
                 </div>
-                <div className="flex items-center gap-4 bg-black/40 p-4 rounded-xl border border-white/5">
+
+                {/* LOCKED: Primary color */}
+                <div className={`flex items-center gap-4 bg-black/40 p-4 rounded-xl border border-white/5 relative ${LOCKED ? 'opacity-50 pointer-events-none select-none' : ''}`}>
                   <span className="text-white text-[10px] font-bold">اللون الأساسي</span>
-                  <input type="color" className="w-10 h-10 rounded bg-transparent border-0 cursor-pointer" value={settings.primaryColor} onChange={e => updateGlobalSettings("primaryColor", e.target.value)} />
+                  <input type="color" className="w-10 h-10 rounded bg-transparent border-0 cursor-pointer"
+                    value={settings.primaryColor}
+                    onChange={e => updateGlobalSettings("primaryColor", e.target.value)}
+                    disabled={LOCKED} />
+                  {LOCKED && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 text-xs">🔒</span>}
                 </div>
-                <div className="flex items-center gap-4 bg-black/40 p-4 rounded-xl border border-white/5">
+
+                {/* LOCKED: Background color */}
+                <div className={`flex items-center gap-4 bg-black/40 p-4 rounded-xl border border-white/5 relative ${LOCKED ? 'opacity-50 pointer-events-none select-none' : ''}`}>
                   <span className="text-white text-[10px] font-bold">لون الخلفية</span>
-                  <input type="color" className="w-10 h-10 rounded bg-transparent border-0 cursor-pointer" value={settings.bgColor} onChange={e => updateGlobalSettings("bgColor", e.target.value)} />
+                  <input type="color" className="w-10 h-10 rounded bg-transparent border-0 cursor-pointer"
+                    value={settings.bgColor}
+                    onChange={e => updateGlobalSettings("bgColor", e.target.value)}
+                    disabled={LOCKED} />
+                  {LOCKED && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 text-xs">🔒</span>}
                 </div>
+
+                {/* LOCKED notice */}
+                {LOCKED && (
+                  <div className="md:col-span-2 bg-white/3 border border-white/5 rounded-2xl p-4 text-center">
+                    <p className="text-white/20 text-[10px] font-bold">🔒 الاسم واللوغو والألوان محمية — للتعديل تواصل مع المطور</p>
+                  </div>
+                )}
 
               </div>
             </section>
@@ -1625,6 +1742,39 @@ export default function App() {
           <div>
           {/* CUSTOMER HEADER */}
           <header className="pt-10 pb-8 px-6 text-center animate-fade-in">
+
+             {/* ── LOGO ── */}
+             {settings.logoUrl ? (
+               <div className="flex justify-center mb-6">
+                 <div className="relative">
+                   <div className="w-28 h-28 rounded-[2rem] overflow-hidden shadow-2xl ring-4 ring-white border border-black/10"
+                     style={{ boxShadow: `0 20px 60px ${settings.primaryColor}40` }}>
+                     <img src={settings.logoUrl} alt={settings.restaurantName}
+                       className="w-full h-full object-cover"
+                       onError={e => e.target.style.display='none'} />
+                   </div>
+                   <div className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center shadow-lg"
+                     style={{ backgroundColor: settings.primaryColor }}>
+                     <span className="text-white text-[10px]">✓</span>
+                   </div>
+                 </div>
+               </div>
+             ) : (
+               <div className="flex justify-center mb-6">
+                 <div className="relative w-28 h-28 rounded-[2rem] flex items-center justify-center shadow-2xl ring-4 ring-white border border-black/5"
+                   style={{
+                     background: `linear-gradient(135deg, ${settings.primaryColor} 0%, #7c2d12 100%)`,
+                     boxShadow: `0 20px 60px ${settings.primaryColor}50`
+                   }}>
+                   <span className="text-5xl select-none">🍔</span>
+                   <div className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center shadow-lg"
+                     style={{ backgroundColor: settings.primaryColor }}>
+                     <span className="text-white text-[10px]">✓</span>
+                   </div>
+                 </div>
+               </div>
+             )}
+
              <h1 className="text-6xl font-black italic uppercase tracking-tighter leading-tight text-slate-950">{settings.restaurantName}</h1>
              <h2 className="text-4xl font-black text-slate-800/40 mt-1">{settings.restaurantNameAr}</h2>
              <div className="mt-8 flex flex-col items-center gap-3">
