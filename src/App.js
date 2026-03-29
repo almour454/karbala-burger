@@ -716,7 +716,6 @@ export default function App() {
       hourCount[h] = (hourCount[h] || 0) + 1;
     });
     const peakHour = Object.entries(hourCount).sort((a, b) => b[1] - a[1])[0];
-    const fmt = h => { const hh = ((+h - 1 + 24) % 12 + 1); return `${hh}:00 ${+h < 12 ? 'ص' : 'م'} - ${hh}:59 ${+h < 12 ? 'ص' : 'م'}`; };
     const avgOrder = Math.round(finishedTotal / finishedOrders.length);
     const now = new Date();
     const timeStr = now.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
@@ -726,6 +725,7 @@ export default function App() {
   const printDayReport = () => {
     if (!reportData) return;
     const { topItems, peakHour, avgOrder, timeStr } = reportData;
+    const fmt = h => { const hh = (+h % 12) || 12; return `${hh}:00 ${+h < 12 ? 'ص' : 'م'} - ${hh}:59 ${+h < 12 ? 'ص' : 'م'}`; };
     const topItemsHtml = topItems.map(([ name, qty ], i) =>
       `<div class="row"><span>${i+1}. ${name}</span><span>(${qty})</span></div>`
     ).join('');
