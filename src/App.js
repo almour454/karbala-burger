@@ -88,7 +88,7 @@ const BUNDLE = "premium";
 // 🔒 BRAND LOCK — set to false when setting up a new client
 //    true  = name/colors/logo locked (client cannot change)
 //    false = everything editable (developer setup mode)
-const LOCKED = true;
+const LOCKED = false;
 // ============================================================
 
 // Shorthand used throughout the code — don't touch this line
