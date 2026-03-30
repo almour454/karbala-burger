@@ -284,7 +284,7 @@ export default function App() {
             if (!o.createdAt) return false;
             return (now - new Date(o.createdAt).getTime()) < 20000;
           });
-          if (freshNew.length > 0 && prev.length > 0) {
+          if (freshNew.length > 0) {
             if (FEATURES.soundAlert) {
               try {
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
