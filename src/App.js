@@ -670,6 +670,23 @@ export default function App() {
     }
   };
 
+  const handleGiftOrder = async (order) => {
+    const originalTotal = order.grandTotal || 0;
+    if (!window.confirm(
+      `🎁 تحويل الطلب #${order.orderNumber} هدية مجانية؟\n\n` +
+      `الزبون: ${order.customerName}\n` +
+      `المبلغ الأصلي: ${originalTotal.toLocaleString()} د.ع\n\n` +
+      `سيتحول المبلغ إلى صفر ولن يُحسب في المبيعات.\n` +
+      `لا يمكن التراجع — تأكد قبل الضغط.`
+    )) return;
+    try {
+      await updateDoc(
+        doc(db, 'artifacts', appId, 'private', 'data', 'orders', getDateStr(), 'items', order.id),
+        { isGift: true, grandTotal: 0, cartTotal: 0, originalTotal, giftedAt: new Date().toISOString() }
+      );
+    } catch (e) { console.error(e); }
+  };
+
   const handleConfirmDay = async () => {
     if (!window.confirm('تأكيد إنهاء اليوم؟\nسيتم نقل جميع الطلبات النشطة إلى منجزة وحفظ المبيعات.')) return;
     const d = getDateStr();
@@ -717,7 +734,9 @@ export default function App() {
   // Split orders into tabs
   const activeOrders   = orders.filter(o => o.status === 'active');
   const finishedOrders = orders.filter(o => o.status === 'finished');
-  const finishedTotal  = finishedOrders.reduce((s, o) => s + (o.grandTotal || 0), 0);
+  const finishedTotal  = finishedOrders.filter(o => !o.isGift).reduce((s, o) => s + (o.grandTotal || 0), 0);
+  const giftOrders     = finishedOrders.filter(o => o.isGift);
+  const giftTotal      = giftOrders.reduce((s, o) => s + (o.originalTotal || 0), 0);
 
   return (
     <div className="min-h-screen transition-colors duration-500" style={{ backgroundColor: settings.bgColor, fontFamily: 'sans-serif' }}>
@@ -877,6 +896,12 @@ export default function App() {
                     <p className="text-white/30 text-[9px] font-bold mt-1">مبيعات منجزة</p>
                   </div>
                 </div>
+                {giftOrders.length > 0 && (
+                  <div className="bg-purple-500/10 border border-purple-500/20 rounded-2xl px-4 py-3 flex items-center justify-between">
+                    <span className="text-purple-300 text-[11px] font-black flex items-center gap-2">🎁 هدايا اليوم: {giftOrders.length} طلب</span>
+                    <span className="text-purple-400 font-black text-[11px]">{giftTotal.toLocaleString()} د.ع</span>
+                  </div>
+                )}
 
                 {/* Active / Finished sub-tabs */}
                 <div className="flex gap-2">
@@ -923,7 +948,8 @@ export default function App() {
                         <h2>تقرير المبيعات اليومي</h2><div class="sub">${settings.restaurantName} — ${todayStr} — ${now}</div><hr/>
                         <div class="big">${finishedTotal.toLocaleString()} د.ع</div><div class="label">إجمالي المبيعات</div>
                         <div class="row" style="margin-top:8px"><span>عدد الطلبات:</span><span>${finishedOrders.length}</span></div>
-                        <div class="row"><span>متوسط الطلب:</span><span>${avg.toLocaleString()} د.ع</span></div><hr/>
+                        <div class="row"><span>متوسط الطلب:</span><span>${avg.toLocaleString()} د.ع</span></div>
+                        ${giftOrders.length > 0 ? `<div class="row" style="color:#7c3aed;margin-top:4px"><span>🎁 هدايا مجانية:</span><span>${giftOrders.length} طلب — ${giftTotal.toLocaleString()} د.ع</span></div>` : ''}<hr/>
                         <div style="font-weight:900;margin-bottom:4px">الأصناف الأكثر مبيعاً:</div>
                         ${top.map(([n,q],i)=>`<div class="row"><span>${i+1}. ${n}</span><span>(${q})</span></div>`).join('')}<hr/>
                         ${peak?`<div class="row"><span>ساعة الذروة:</span><span>${fmt(peak[0])} (${peak[1]} طلب)</span></div><hr/>`:''}
@@ -1050,9 +1076,19 @@ export default function App() {
                               </div>
                             </div>
                             <div className="text-right shrink-0 flex flex-col items-end gap-2">
-                              <p className="text-2xl font-black leading-none" style={{ color: settings.primaryColor }}>
-                                {(order.grandTotal || 0).toLocaleString()} <span className="text-[10px]">د.ع</span>
-                              </p>
+                              {order.isGift ? (
+                                <div className="flex flex-col items-end gap-1">
+                                  <span className="bg-purple-500/20 text-purple-300 text-[9px] font-black px-2.5 py-1 rounded-full flex items-center gap-1">🎁 هدية مجانية</span>
+                                  <p className="text-xl font-black leading-none line-through text-white/20">
+                                    {(order.originalTotal || 0).toLocaleString()} <span className="text-[10px]">د.ع</span>
+                                  </p>
+                                  <p className="text-lg font-black leading-none text-purple-400">0 د.ع</p>
+                                </div>
+                              ) : (
+                                <p className="text-2xl font-black leading-none" style={{ color: settings.primaryColor }}>
+                                  {(order.grandTotal || 0).toLocaleString()} <span className="text-[10px]">د.ع</span>
+                                </p>
+                              )}
                               {FEATURES.printSlip && (
                                 <button onClick={() => printOrderReceipt(order)}
                                   className="text-[10px] font-black text-white/40 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-xl transition-all">
@@ -1100,6 +1136,11 @@ export default function App() {
                               className="px-4 py-3 rounded-2xl bg-[#25D366]/20 text-[#25D366] font-black text-[11px] flex items-center justify-center hover:bg-[#25D366]/30 transition-all shrink-0">
                               💬
                             </a>
+                            <button onClick={() => handleGiftOrder(order)}
+                              title="تحويل إلى هدية مجانية"
+                              className="px-3 py-3 rounded-2xl bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 font-black text-[11px] transition-all shrink-0 flex items-center gap-1">
+                              <span className="text-[12px]">🎁</span>
+                            </button>
                             <button onClick={() => handleDeleteOrder(order, todayStr)}
                               className="flex-1 py-3 rounded-2xl bg-red-500/15 text-red-400 hover:bg-red-500 hover:text-white font-black text-[12px] transition-all">
                               🗑️ حذف الطلب
@@ -1130,26 +1171,38 @@ export default function App() {
                         ? new Date(order.createdAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })
                         : '';
                       return (
-                        <div key={order.id} className="bg-slate-900 rounded-[2rem] p-5 border border-green-500/20 opacity-80">
+                        <div key={order.id} className={`bg-slate-900 rounded-[2rem] p-5 border ${order.isGift ? 'border-purple-500/30' : 'border-green-500/20'} opacity-80`}>
                           <div className="flex justify-between items-start gap-3 mb-3">
                             <div className="flex items-start gap-3">
                               {FEATURES.orderNumbers && (
-                                <div className="shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl text-white bg-green-600">
+                                <div className={`shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl text-white ${order.isGift ? 'bg-purple-600' : 'bg-green-600'}`}>
                                   #{order.orderNumber || '?'}
                                 </div>
                               )}
                               <div>
                                 <div className="flex items-center gap-2 mb-1">
-                                  <span className="bg-green-600 text-white text-[9px] font-black px-3 py-1 rounded-full">منجز ✓</span>
+                                  {order.isGift
+                                    ? <span className="bg-purple-600 text-white text-[9px] font-black px-3 py-1 rounded-full">🎁 هدية</span>
+                                    : <span className="bg-green-600 text-white text-[9px] font-black px-3 py-1 rounded-full">منجز ✓</span>
+                                  }
                                   <span className="text-white/30 text-[10px] font-bold">{time}</span>
                                 </div>
                                 <p className="text-white font-black text-sm leading-tight">{order.customerName}</p>
                                 <p className="text-white/40 text-[10px] font-bold mt-0.5" dir="ltr">{order.customerPhone}</p>
                               </div>
                             </div>
-                            <p className="text-green-400 font-black text-lg shrink-0">
-                              {(order.grandTotal || 0).toLocaleString()} <span className="text-[10px]">د.ع</span>
-                            </p>
+                            <div className="text-right">
+                              {order.isGift ? (
+                                <div className="flex flex-col items-end gap-0.5">
+                                  <p className="text-white/20 font-black text-sm line-through">{(order.originalTotal || 0).toLocaleString()} د.ع</p>
+                                  <p className="text-purple-400 font-black text-base">0 د.ع</p>
+                                </div>
+                              ) : (
+                                <p className="text-green-400 font-black text-lg shrink-0">
+                                  {(order.grandTotal || 0).toLocaleString()} <span className="text-[10px]">د.ع</span>
+                                </p>
+                              )}
+                            </div>
                           </div>
                           <div className="bg-black/20 rounded-xl p-3 mb-3 space-y-1">
                             {(order.items || []).map((it, i) => (
