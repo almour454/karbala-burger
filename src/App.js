@@ -356,26 +356,41 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isUnlocked, orders, settings.autoGreyHours]);
 
-  // Auto-confirm: if first order after 6am and yesterday not confirmed
+  // Auto-confirm: if owner opens panel after 6am and yesterday not confirmed
+  // — fetches yesterday's orders, moves active ones to finished, saves real total
   useEffect(() => {
     if (!isUnlocked) return;
     const checkAutoConfirm = async () => {
       const now = new Date();
-      if (now.getHours() >= 6) {
-        const yesterdayDate = new Date(now);
-        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-        const yStr = yesterdayDate.toLocaleDateString('en-CA');
-        const confirmedDoc = doc(db, 'artifacts', appId, 'private', 'data', 'orders', yStr, 'meta', 'confirmed');
-        try {
-          const snap = await getDoc(confirmedDoc);
-          if (!snap.exists()) {
-            await setDoc(confirmedDoc, {
-              confirmedAt: new Date().toISOString(),
-              autoConfirmed: true
-            });
-          }
-        } catch (e) { console.error(e); }
-      }
+      if (now.getHours() < 6) return;
+      const yesterdayDate = new Date(now);
+      yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+      const yStr = yesterdayDate.toLocaleDateString('en-CA');
+      const confirmedDoc = doc(db, 'artifacts', appId, 'private', 'data', 'orders', yStr, 'meta', 'confirmed');
+      try {
+        const snap = await getDoc(confirmedDoc);
+        if (snap.exists()) return; // already confirmed
+        // Fetch all of yesterday's orders
+        const q = query(getOrdersCollection(yStr), orderBy("createdAt", "desc"));
+        const ordersSnap = await getDocs(q);
+        const yesterdayOrders = ordersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Move any still-active ones to finished
+        for (const o of yesterdayOrders.filter(o => o.status === 'active')) {
+          await updateDoc(
+            doc(db, 'artifacts', appId, 'private', 'data', 'orders', yStr, 'items', o.id),
+            { status: 'finished', finishedAt: new Date().toISOString() }
+          );
+        }
+        // Calculate real total (exclude gifts)
+        const allDone = yesterdayOrders.filter(o => o.status === 'finished' || o.status === 'active');
+        const total = allDone.filter(o => !o.isGift).reduce((s, o) => s + (o.grandTotal || 0), 0);
+        await setDoc(confirmedDoc, {
+          confirmedAt: new Date().toISOString(),
+          total,
+          orderCount: allDone.length,
+          autoConfirmed: true
+        });
+      } catch (e) { console.error(e); }
     };
     checkAutoConfirm();
   }, [isUnlocked]);
