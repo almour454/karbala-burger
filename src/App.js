@@ -625,37 +625,52 @@ export default function App() {
       ? new Date(order.createdAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })
       : '';
     const rows = (order.items || [])
-      .map(it => `<div class="row"><span>${it.name}</span><span>×${it.qty} — ${((it.price||0)*it.qty).toLocaleString()} د.ع</span></div>`)
+      .map(it => `<div class="row"><span>${it.name}</span><span>x${it.qty} ${((it.price||0)*it.qty).toLocaleString()}</span></div>`)
       .join('');
     const deliveryRow = order.deliveryFee > 0
-      ? `<div class="row"><span>توصيل</span><span>${order.deliveryFee.toLocaleString()} د.ع</span></div>`
+      ? `<div class="row"><span>توصيل</span><span>${order.deliveryFee.toLocaleString()}</span></div>`
       : '';
     return `<html><head><meta charset="utf-8"/>
       <style>
-        body{font-family:sans-serif;padding:16px;direction:rtl;font-size:13px;max-width:300px;margin:0}
-        h1{font-size:20px;font-weight:900;margin:0 0 2px}
-        .num{font-size:44px;font-weight:900;line-height:1;margin:4px 0 10px}
-        .row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dotted #ccc}
-        .total{font-weight:900;font-size:15px;margin-top:8px}
-        .meta{color:#666;font-size:11px;margin-top:4px}
-        hr{border:none;border-top:2px dashed #333;margin:10px 0}
+        @page { size: 58mm auto; margin: 2mm; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Courier New', monospace; direction: rtl;
+               font-size: 11px; width: 54mm; margin: 0; padding: 0; }
+        h1 { font-size: 13px; font-weight: 900; text-align: center; margin: 0 0 1mm; }
+        .num { font-size: 28px; font-weight: 900; text-align: center;
+               line-height: 1; margin: 2mm 0; letter-spacing: -1px; }
+        .center { text-align: center; }
+        .meta { font-size: 9px; color: #444; margin: 0.5mm 0; }
+        .row { display: flex; justify-content: space-between;
+               padding: 1mm 0; border-bottom: 1px dotted #999; font-size: 10px; }
+        .total { display: flex; justify-content: space-between;
+                 font-weight: 900; font-size: 12px; margin-top: 2mm; }
+        hr { border: none; border-top: 1px dashed #333; margin: 2mm 0; }
+        .thanks { text-align: center; font-size: 9px; margin-top: 3mm; }
+        @media print {
+          body { width: 54mm; }
+          html { width: 58mm; }
+        }
       </style></head><body>
       <h1>${settings.restaurantName}</h1>
-      <div class="meta">${order.dateStr || getDateStr()} — ${time}</div>
+      <div class="meta center">${settings.restaurantNameAr}</div>
+      <hr/>
+      <div class="meta center">${order.dateStr || getDateStr()} — ${time}</div>
       <div class="num">#${order.orderNumber || '—'}</div>
-      <div class="meta" style="font-weight:700">${order.customerName} — ${order.customerPhone}</div>
+      <hr/>
+      <div class="meta"><b>${order.customerName}</b> — ${order.customerPhone}</div>
       <div class="meta">📍 ${order.address}</div>
       <hr/>
       ${rows}${deliveryRow}
-      <div class="row total"><span>الإجمالي</span><span>${(order.grandTotal||0).toLocaleString()} د.ع</span></div>
+      <div class="total"><span>الإجمالي</span><span>${(order.grandTotal||0).toLocaleString()} د.ع</span></div>
       <hr/>
-      <div class="meta" style="text-align:center;margin-top:8px">شكراً لطلبك 🍔</div>
+      <div class="thanks">شكراً لطلبك 🍔</div>
       <script>window.onload=()=>{window.print();window.close();}<\/script>
       </body></html>`;
   };
 
   const printOrderReceipt = (order) => {
-    const win = window.open('', '_blank', 'width=320,height=500');
+    const win = window.open('', '_blank', 'width=240,height=400');
     if (!win) return;
     win.document.write(buildReceiptHtml(order));
     win.document.close();
@@ -943,8 +958,8 @@ export default function App() {
                       const peak = Object.entries(hC).sort((a,b)=>b[1]-a[1])[0];
                       const avg = Math.round(finishedTotal/finishedOrders.length);
                       const now = new Date().toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'});
-                      const win = window.open('','_blank','width=360,height=600');
-                      win.document.write(`<html><head><meta charset="utf-8"/><style>body{font-family:monospace;padding:20px;direction:rtl;font-size:13px;max-width:320px;margin:0 auto}h2{font-size:15px;font-weight:900;text-align:center;margin:0 0 4px}.sub{text-align:center;font-size:11px;color:#555;margin-bottom:8px}hr{border:none;border-top:1px dashed #333;margin:10px 0}.row{display:flex;justify-content:space-between;padding:2px 0}.big{font-size:22px;font-weight:900;text-align:center;margin:6px 0}.label{font-size:11px;color:#555;text-align:center}.sign{border-bottom:1px solid #333;margin-top:4px;height:24px}</style></head><body>
+                      const win = window.open('','_blank','width=240,height=500');
+                      win.document.write(`<html><head><meta charset="utf-8"/><style>@page{size:58mm auto;margin:2mm}*{box-sizing:border-box}body{font-family:"Courier New",monospace;direction:rtl;font-size:10px;width:54mm;margin:0;padding:0}h2{font-size:12px;font-weight:900;text-align:center;margin:0 0 1mm}.sub{text-align:center;font-size:8px;color:#444;margin-bottom:1mm}hr{border:none;border-top:1px dashed #333;margin:2mm 0}.row{display:flex;justify-content:space-between;padding:1mm 0;font-size:9px}.big{font-size:18px;font-weight:900;text-align:center;margin:2mm 0}.label{font-size:8px;color:#555;text-align:center}.sign{border-bottom:1px solid #333;margin-top:1mm;height:6mm}@media print{body{width:54mm}html{width:58mm}}</style></head><body>
                         <h2>تقرير المبيعات اليومي</h2><div class="sub">${settings.restaurantName} — ${todayStr} — ${now}</div><hr/>
                         <div class="big">${finishedTotal.toLocaleString()} د.ع</div><div class="label">إجمالي المبيعات</div>
                         <div class="row" style="margin-top:8px"><span>عدد الطلبات:</span><span>${finishedOrders.length}</span></div>
@@ -1348,8 +1363,8 @@ export default function App() {
                       hFin.forEach(o => { if(!o.createdAt) return; const h = new Date(o.createdAt).getHours(); hHC[h]=(hHC[h]||0)+1; });
                       const hPeak = Object.entries(hHC).sort((a,b)=>b[1]-a[1])[0];
                       const hAvg = hFin.length ? Math.round(hTotal/hFin.length) : 0;
-                      const win = window.open('','_blank','width=360,height=600');
-                      win.document.write(`<html><head><meta charset="utf-8"/><style>body{font-family:monospace;padding:20px;direction:rtl;font-size:13px;max-width:320px;margin:0 auto}h2{font-size:15px;font-weight:900;text-align:center;margin:0 0 4px}.sub{text-align:center;font-size:11px;color:#555;margin-bottom:8px}hr{border:none;border-top:1px dashed #333;margin:10px 0}.row{display:flex;justify-content:space-between;padding:2px 0}.big{font-size:22px;font-weight:900;text-align:center;margin:6px 0}.label{font-size:11px;color:#555;text-align:center}.sign{border-bottom:1px solid #333;margin-top:4px;height:24px}</style></head><body>
+                      const win = window.open('','_blank','width=240,height=500');
+                      win.document.write(`<html><head><meta charset="utf-8"/><style>@page{size:58mm auto;margin:2mm}*{box-sizing:border-box}body{font-family:"Courier New",monospace;direction:rtl;font-size:10px;width:54mm;margin:0;padding:0}h2{font-size:12px;font-weight:900;text-align:center;margin:0 0 1mm}.sub{text-align:center;font-size:8px;color:#444;margin-bottom:1mm}hr{border:none;border-top:1px dashed #333;margin:2mm 0}.row{display:flex;justify-content:space-between;padding:1mm 0;font-size:9px}.big{font-size:18px;font-weight:900;text-align:center;margin:2mm 0}.label{font-size:8px;color:#555;text-align:center}.sign{border-bottom:1px solid #333;margin-top:1mm;height:6mm}@media print{body{width:54mm}html{width:58mm}}</style></head><body>
                         <h2>تقرير المبيعات</h2><div class="sub">${settings.restaurantName} — ${historyDate}</div><hr/>
                         <div class="big">${hTotal.toLocaleString()} د.ع</div><div class="label">إجمالي المبيعات</div>
                         <div class="row" style="margin-top:8px"><span>عدد الطلبات:</span><span>${hFin.length}</span></div>
