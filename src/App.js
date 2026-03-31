@@ -730,9 +730,9 @@ export default function App() {
         );
       } catch (e) { console.error(e); }
     }
-    // Save confirmed summary (all orders, both active-just-finished and already-finished)
+    // Save confirmed summary — exclude gift orders from total
     const allToday = orders.filter(o => o.status === 'finished' || o.status === 'active');
-    const total = allToday.reduce((s, o) => s + (o.grandTotal || 0), 0);
+    const total = allToday.filter(o => !o.isGift).reduce((s, o) => s + (o.grandTotal || 0), 0);
     try {
       await setDoc(
         doc(db, 'artifacts', appId, 'private', 'data', 'orders', d, 'meta', 'confirmed'),
