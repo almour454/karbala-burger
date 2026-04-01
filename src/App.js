@@ -366,24 +366,26 @@ export default function App() {
       const yesterdayDate = new Date(now);
       yesterdayDate.setDate(yesterdayDate.getDate() - 1);
       const yStr = yesterdayDate.toLocaleDateString('en-CA');
-      const confirmedDoc = doc(db, 'artifacts', appId, 'private', 'data', 'orders', yStr, 'meta', 'confirmed');
       try {
-        const snap = await getDoc(confirmedDoc);
-        if (snap.exists()) return; // already confirmed
-        // Fetch all of yesterday's orders
+        // Always fetch yesterday's orders to check for stuck-active ones
         const q = query(getOrdersCollection(yStr), orderBy("createdAt", "desc"));
         const ordersSnap = await getDocs(q);
         const yesterdayOrders = ordersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const stuckActive = yesterdayOrders.filter(o => o.status === 'active');
         // Move any still-active ones to finished
-        for (const o of yesterdayOrders.filter(o => o.status === 'active')) {
+        for (const o of stuckActive) {
           await updateDoc(
             doc(db, 'artifacts', appId, 'private', 'data', 'orders', yStr, 'items', o.id),
             { status: 'finished', finishedAt: new Date().toISOString() }
           );
         }
-        // Calculate real total (exclude gifts)
+        // Always recalculate and save confirmed doc with correct total
         const allDone = yesterdayOrders.filter(o => o.status === 'finished' || o.status === 'active');
         const total = allDone.filter(o => !o.isGift).reduce((s, o) => s + (o.grandTotal || 0), 0);
+        const confirmedDoc = doc(db, 'artifacts', appId, 'private', 'data', 'orders', yStr, 'meta', 'confirmed');
+        const snap = await getDoc(confirmedDoc);
+        // Only skip if already confirmed AND no stuck orders
+        if (snap.exists() && stuckActive.length === 0) return;
         await setDoc(confirmedDoc, {
           confirmedAt: new Date().toISOString(),
           total,
@@ -1358,7 +1360,7 @@ export default function App() {
                       {[
                         { label: "عدد الطلبات", value: historyOrders.length },
                         { label: "منجزة", value: historyOrders.filter(o => o.status === 'finished' || o.status === 'done').length },
-                        { label: "إجمالي المبيعات", value: historyOrders.filter(o => o.status === 'finished' || o.status === 'done').reduce((s, o) => s + (o.grandTotal || 0), 0).toLocaleString() + " د.ع" },
+                        { label: "إجمالي المبيعات", value: historyOrders.filter(o => (o.status === 'finished' || o.status === 'done') && !o.isGift).reduce((s, o) => s + (o.grandTotal || 0), 0).toLocaleString() + " د.ع" },
                       ].map(s => (
                         <div key={s.label} className="bg-slate-900 rounded-2xl p-4 border border-white/5 text-center">
                           <p className="text-white font-black text-lg leading-tight">{s.value}</p>
@@ -1370,20 +1372,24 @@ export default function App() {
                     {/* History print report button */}
                     <button onClick={() => {
                       const hFin = historyOrders.filter(o => o.status === 'finished' || o.status === 'done');
-                      const hTotal = hFin.reduce((s, o) => s + (o.grandTotal || 0), 0);
+                      const hGifts = hFin.filter(o => o.isGift);
+                      const hGiftTotal = hGifts.reduce((s, o) => s + (o.originalTotal || 0), 0);
+                      const hPaid = hFin.filter(o => !o.isGift);
+                      const hTotal = hPaid.reduce((s, o) => s + (o.grandTotal || 0), 0);
                       const hIC = {};
                       hFin.forEach(o => (o.items||[]).forEach(it => { hIC[it.name] = (hIC[it.name]||0)+(it.qty||1); }));
                       const hTop = Object.entries(hIC).sort((a,b)=>b[1]-a[1]).slice(0,5);
                       const hHC = {};
                       hFin.forEach(o => { if(!o.createdAt) return; const h = new Date(o.createdAt).getHours(); hHC[h]=(hHC[h]||0)+1; });
                       const hPeak = Object.entries(hHC).sort((a,b)=>b[1]-a[1])[0];
-                      const hAvg = hFin.length ? Math.round(hTotal/hFin.length) : 0;
+                      const hAvg = hPaid.length ? Math.round(hTotal/hPaid.length) : 0;
                       const win = window.open('','_blank','width=240,height=500');
                       win.document.write(`<html><head><meta charset="utf-8"/><style>@page{size:58mm auto;margin:2mm}*{box-sizing:border-box}body{font-family:"Courier New",monospace;direction:rtl;font-size:10px;width:54mm;margin:0;padding:0}h2{font-size:12px;font-weight:900;text-align:center;margin:0 0 1mm}.sub{text-align:center;font-size:8px;color:#444;margin-bottom:1mm}hr{border:none;border-top:1px dashed #333;margin:2mm 0}.row{display:flex;justify-content:space-between;padding:1mm 0;font-size:9px}.big{font-size:18px;font-weight:900;text-align:center;margin:2mm 0}.label{font-size:8px;color:#555;text-align:center}.sign{border-bottom:1px solid #333;margin-top:1mm;height:6mm}@media print{body{width:54mm}html{width:58mm}}</style></head><body>
                         <h2>تقرير المبيعات</h2><div class="sub">${settings.restaurantName} — ${historyDate}</div><hr/>
                         <div class="big">${hTotal.toLocaleString()} د.ع</div><div class="label">إجمالي المبيعات</div>
                         <div class="row" style="margin-top:8px"><span>عدد الطلبات:</span><span>${hFin.length}</span></div>
-                        <div class="row"><span>متوسط الطلب:</span><span>${hAvg.toLocaleString()} د.ع</span></div><hr/>
+                        <div class="row"><span>متوسط الطلب:</span><span>${hAvg.toLocaleString()} د.ع</span></div>
+                        ${hGifts.length > 0 ? `<div class="row" style="color:#7c3aed"><span>🎁 هدايا مجانية:</span><span>${hGifts.length} طلب — ${hGiftTotal.toLocaleString()} د.ع</span></div>` : ''}<hr/>
                         <div style="font-weight:900;margin-bottom:4px">الأصناف الأكثر مبيعاً:</div>
                         ${hTop.map(([n,q],i)=>`<div class="row"><span>${i+1}. ${n}</span><span>(${q})</span></div>`).join('')}<hr/>
                         ${hPeak?`<div class="row"><span>ساعة الذروة:</span><span>${((+hPeak[0]%12)||12)}:00 ${+hPeak[0]<12?'ص':'م'} (${hPeak[1]} طلب)</span></div><hr/>`:''}
