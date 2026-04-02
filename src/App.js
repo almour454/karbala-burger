@@ -638,11 +638,13 @@ export default function App() {
   };
 
   const buildReceiptHtml = (order) => {
+    // Sanitize user-supplied strings before injecting into HTML
+    const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     const time = order.createdAt
       ? new Date(order.createdAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })
       : '';
     const rows = (order.items || [])
-      .map(it => `<div class="row"><span>${it.name}</span><span>x${it.qty} ${((it.price||0)*it.qty).toLocaleString()}</span></div>`)
+      .map(it => `<div class="row"><span>${esc(it.name)}</span><span>x${it.qty} ${((it.price||0)*it.qty).toLocaleString()}</span></div>`)
       .join('');
     const deliveryRow = order.deliveryFee > 0
       ? `<div class="row"><span>توصيل</span><span>${order.deliveryFee.toLocaleString()}</span></div>`
@@ -675,8 +677,8 @@ export default function App() {
       <div class="meta center">${order.dateStr || getDateStr()} — ${time}</div>
       <div class="num">#${order.orderNumber || '—'}</div>
       <hr/>
-      <div class="meta"><b>${order.customerName}</b> — ${order.customerPhone}</div>
-      <div class="meta">📍 ${order.address}</div>
+      <div class="meta"><b>${esc(order.customerName)}</b> — ${esc(order.customerPhone)}</div>
+      <div class="meta">📍 ${esc(order.address)}</div>
       <hr/>
       ${rows}${deliveryRow}
       <div class="total"><span>الإجمالي</span><span>${(order.grandTotal||0).toLocaleString()} د.ع</span></div>
