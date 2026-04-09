@@ -356,43 +356,42 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isUnlocked, orders, settings.autoGreyHours]);
 
-  // Auto-confirm: if owner opens panel after 6am and yesterday not confirmed
-  // — fetches yesterday's orders, moves active ones to finished, saves real total
+  // Auto-confirm: on dashboard open, scan last 7 days for any stuck-active orders
+  // Teaching: The orders listener only loads TODAY. So orders from 2+ days ago
+  // that were never confirmed stay "active" forever unless we explicitly check them.
   useEffect(() => {
     if (!isUnlocked) return;
     const checkAutoConfirm = async () => {
       const now = new Date();
       if (now.getHours() < 6) return;
-      const yesterdayDate = new Date(now);
-      yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-      const yStr = yesterdayDate.toLocaleDateString('en-CA');
-      try {
-        // Always fetch yesterday's orders to check for stuck-active ones
-        const q = query(getOrdersCollection(yStr), orderBy("createdAt", "desc"));
-        const ordersSnap = await getDocs(q);
-        const yesterdayOrders = ordersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        const stuckActive = yesterdayOrders.filter(o => o.status === 'active');
-        // Move any still-active ones to finished
-        for (const o of stuckActive) {
-          await updateDoc(
-            doc(db, 'artifacts', appId, 'private', 'data', 'orders', yStr, 'items', o.id),
-            { status: 'finished', finishedAt: new Date().toISOString() }
+      // Check last 7 days (skip today — today's orders are handled by autoGrey)
+      for (let daysBack = 1; daysBack <= 7; daysBack++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - daysBack);
+        const dStr = d.toLocaleDateString('en-CA');
+        try {
+          const q = query(getOrdersCollection(dStr), orderBy("createdAt", "desc"));
+          const snap = await getDocs(q);
+          const dayOrders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const stuckActive = dayOrders.filter(o => o.status === 'active');
+          if (stuckActive.length === 0) continue; // nothing stuck, skip
+          // Move stuck orders to finished
+          for (const o of stuckActive) {
+            await updateDoc(
+              doc(db, 'artifacts', appId, 'private', 'data', 'orders', dStr, 'items', o.id),
+              { status: 'finished', finishedAt: new Date().toISOString() }
+            );
+          }
+          // Save confirmed summary
+          const allOrders = dayOrders.filter(o => o.status === 'finished' || o.status === 'active');
+          const total = allOrders.filter(o => !o.isGift).reduce((s, o) => s + (o.grandTotal || 0), 0);
+          await setDoc(
+            doc(db, 'artifacts', appId, 'private', 'data', 'orders', dStr, 'meta', 'confirmed'),
+            { confirmedAt: new Date().toISOString(), total, orderCount: allOrders.length, autoConfirmed: true },
+            { merge: true }
           );
-        }
-        // Always recalculate and save confirmed doc with correct total
-        const allDone = yesterdayOrders.filter(o => o.status === 'finished' || o.status === 'active');
-        const total = allDone.filter(o => !o.isGift).reduce((s, o) => s + (o.grandTotal || 0), 0);
-        const confirmedDoc = doc(db, 'artifacts', appId, 'private', 'data', 'orders', yStr, 'meta', 'confirmed');
-        const snap = await getDoc(confirmedDoc);
-        // Only skip if already confirmed AND no stuck orders
-        if (snap.exists() && stuckActive.length === 0) return;
-        await setDoc(confirmedDoc, {
-          confirmedAt: new Date().toISOString(),
-          total,
-          orderCount: allDone.length,
-          autoConfirmed: true
-        });
-      } catch (e) { console.error(e); }
+        } catch (e) { console.error(e); }
+      }
     };
     checkAutoConfirm();
   }, [isUnlocked]);
