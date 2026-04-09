@@ -356,15 +356,14 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isUnlocked, orders, settings.autoGreyHours]);
 
-  // Auto-confirm: on dashboard open, scan last 7 days for any stuck-active orders
-  // Teaching: The orders listener only loads TODAY. So orders from 2+ days ago
-  // that were never confirmed stay "active" forever unless we explicitly check them.
+  // Auto-cleanup: every time owner opens dashboard, scan last 7 days
+  // for any orders still stuck as "active" and flip them to finished.
+  // No time restriction — stuck orders can happen any time (e.g. midnight shift).
   useEffect(() => {
     if (!isUnlocked) return;
     const checkAutoConfirm = async () => {
       const now = new Date();
-      if (now.getHours() < 6) return;
-      // Check last 7 days (skip today — today's orders are handled by autoGrey)
+      // Check last 7 days (not today — today handled by live auto-grey)
       for (let daysBack = 1; daysBack <= 7; daysBack++) {
         const d = new Date(now);
         d.setDate(d.getDate() - daysBack);
@@ -374,15 +373,15 @@ export default function App() {
           const snap = await getDocs(q);
           const dayOrders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           const stuckActive = dayOrders.filter(o => o.status === 'active');
-          if (stuckActive.length === 0) continue; // nothing stuck, skip
-          // Move stuck orders to finished
+          if (stuckActive.length === 0) continue; // nothing stuck this day, skip
+          // Flip all stuck orders to finished
           for (const o of stuckActive) {
             await updateDoc(
               doc(db, 'artifacts', appId, 'private', 'data', 'orders', dStr, 'items', o.id),
               { status: 'finished', finishedAt: new Date().toISOString() }
             );
           }
-          // Save confirmed summary
+          // Save confirmed summary for that day
           const allOrders = dayOrders.filter(o => o.status === 'finished' || o.status === 'active');
           const total = allOrders.filter(o => !o.isGift).reduce((s, o) => s + (o.grandTotal || 0), 0);
           await setDoc(
