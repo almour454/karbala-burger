@@ -73,7 +73,18 @@ const getOwnerDoc = () => doc(db, 'artifacts', appId, 'private', 'data', 'admin'
 const getOrdersCollection = (dateStr) => collection(db, 'artifacts', appId, 'private', 'data', 'orders', dateStr, 'items');
 // Counter lives in public so anonymous customers can read+write it during the transaction
 const getOrderCounterDoc = (dateStr) => doc(db, 'artifacts', appId, 'public', 'data', 'counters', dateStr);
-const getDateStr = () => new Date().toLocaleDateString('en-CA');
+// getDateStr: returns the "business day" date string.
+// If current hour is before closeHour (e.g. 12:30am and closeHour=1),
+// it means we're still in the previous business day — return yesterday.
+const getDateStr = (closeHour = 0) => {
+  const now = new Date();
+  if (closeHour > 0 && now.getHours() < closeHour) {
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday.toLocaleDateString('en-CA');
+  }
+  return now.toLocaleDateString('en-CA');
+};
 
 // ============================================================
 // 🚩 BUNDLE — change one word to switch plans
@@ -183,7 +194,9 @@ export default function App() {
   const [historySearchNum, setHistorySearchNum] = useState("");
 
   // today's date string "YYYY-MM-DD" in local time
-  const todayStr = new Date().toLocaleDateString('en-CA');
+  // todayStr respects dayCloseHour — if it's 12:30am and closeHour is 1,
+  // we're still in yesterday's business day
+  const todayStr = getDateStr(settings.dayCloseHour);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -271,7 +284,7 @@ export default function App() {
   // Orders listener — live feed for TODAY only
   useEffect(() => {
     if (!isUnlocked) { setOrders([]); return; }
-    const q = query(getOrdersCollection(getDateStr()), orderBy("createdAt", "desc"));
+    const q = query(getOrdersCollection(getDateStr(settings.dayCloseHour)), orderBy("createdAt", "desc"));
     const unsub = onSnapshot(q,
       (snap) => {
         const now = Date.now();
@@ -343,7 +356,7 @@ export default function App() {
       );
       for (const o of toFinish) {
         try {
-          const orderDate = o.dateStr || getDateStr();
+          const orderDate = o.dateStr || getDateStr(settings.dayCloseHour);
           await updateDoc(
             doc(db, 'artifacts', appId, 'private', 'data', 'orders', orderDate, 'items', o.id),
             { status: "finished", finishedAt: new Date().toISOString() }
@@ -356,41 +369,43 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isUnlocked, orders, settings.autoGreyHours]);
 
-  // Auto-cleanup: every time owner opens dashboard, scan last 7 days
-  // for any orders still stuck as "active" and flip them to finished.
-  // No time restriction — stuck orders can happen any time (e.g. midnight shift).
+  // Auto-confirm: if owner opens panel after 6am and yesterday not confirmed
+  // — fetches yesterday's orders, moves active ones to finished, saves real total
   useEffect(() => {
     if (!isUnlocked) return;
     const checkAutoConfirm = async () => {
       const now = new Date();
-      // Check last 7 days (not today — today handled by live auto-grey)
-      for (let daysBack = 1; daysBack <= 7; daysBack++) {
-        const d = new Date(now);
-        d.setDate(d.getDate() - daysBack);
-        const dStr = d.toLocaleDateString('en-CA');
-        try {
-          const q = query(getOrdersCollection(dStr), orderBy("createdAt", "desc"));
-          const snap = await getDocs(q);
-          const dayOrders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          const stuckActive = dayOrders.filter(o => o.status === 'active');
-          if (stuckActive.length === 0) continue; // nothing stuck this day, skip
-          // Flip all stuck orders to finished
-          for (const o of stuckActive) {
-            await updateDoc(
-              doc(db, 'artifacts', appId, 'private', 'data', 'orders', dStr, 'items', o.id),
-              { status: 'finished', finishedAt: new Date().toISOString() }
-            );
-          }
-          // Save confirmed summary for that day
-          const allOrders = dayOrders.filter(o => o.status === 'finished' || o.status === 'active');
-          const total = allOrders.filter(o => !o.isGift).reduce((s, o) => s + (o.grandTotal || 0), 0);
-          await setDoc(
-            doc(db, 'artifacts', appId, 'private', 'data', 'orders', dStr, 'meta', 'confirmed'),
-            { confirmedAt: new Date().toISOString(), total, orderCount: allOrders.length, autoConfirmed: true },
-            { merge: true }
+      if (now.getHours() < 6) return;
+      const yesterdayDate = new Date(now);
+      yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+      const yStr = yesterdayDate.toLocaleDateString('en-CA');
+      try {
+        // Always fetch yesterday's orders to check for stuck-active ones
+        const q = query(getOrdersCollection(yStr), orderBy("createdAt", "desc"));
+        const ordersSnap = await getDocs(q);
+        const yesterdayOrders = ordersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const stuckActive = yesterdayOrders.filter(o => o.status === 'active');
+        // Move any still-active ones to finished
+        for (const o of stuckActive) {
+          await updateDoc(
+            doc(db, 'artifacts', appId, 'private', 'data', 'orders', yStr, 'items', o.id),
+            { status: 'finished', finishedAt: new Date().toISOString() }
           );
-        } catch (e) { console.error(e); }
-      }
+        }
+        // Always recalculate and save confirmed doc with correct total
+        const allDone = yesterdayOrders.filter(o => o.status === 'finished' || o.status === 'active');
+        const total = allDone.filter(o => !o.isGift).reduce((s, o) => s + (o.grandTotal || 0), 0);
+        const confirmedDoc = doc(db, 'artifacts', appId, 'private', 'data', 'orders', yStr, 'meta', 'confirmed');
+        const snap = await getDoc(confirmedDoc);
+        // Only skip if already confirmed AND no stuck orders
+        if (snap.exists() && stuckActive.length === 0) return;
+        await setDoc(confirmedDoc, {
+          confirmedAt: new Date().toISOString(),
+          total,
+          orderCount: allDone.length,
+          autoConfirmed: true
+        });
+      } catch (e) { console.error(e); }
     };
     checkAutoConfirm();
   }, [isUnlocked]);
@@ -528,13 +543,13 @@ export default function App() {
 
   const updateOrderStatus = async (orderId, status, dateStr) => {
     try {
-      const d = dateStr || getDateStr();
+      const d = dateStr || getDateStr(settings.dayCloseHour);
       await updateDoc(doc(db, 'artifacts', appId, 'private', 'data', 'orders', d, 'items', orderId), { status });
     } catch (e) { console.error(e); }
   };
 
   const saveOrderToFirebase = async () => {
-    const d = getDateStr();
+    const d = getDateStr(settings.dayCloseHour);
     const counterRef = getOrderCounterDoc(d);
     const ordersCol = getOrdersCollection(d);
 
@@ -672,7 +687,7 @@ export default function App() {
       <h1>${settings.restaurantName}</h1>
       <div class="meta center">${settings.restaurantNameAr}</div>
       <hr/>
-      <div class="meta center">${order.dateStr || getDateStr()} — ${time}</div>
+      <div class="meta center">${order.dateStr || getDateStr(settings.dayCloseHour)} — ${time}</div>
       <div class="num">#${order.orderNumber || '—'}</div>
       <hr/>
       <div class="meta"><b>${esc(order.customerName)}</b> — ${esc(order.customerPhone)}</div>
@@ -694,7 +709,7 @@ export default function App() {
   };
 
   const handleDeleteOrder = async (order, dateStr) => {
-    const d = dateStr || getDateStr();
+    const d = dateStr || getDateStr(settings.dayCloseHour);
     if (window.confirm(`⚠️ حذف الطلب #${order.orderNumber} للزبون ${order.customerName} نهائياً؟\n\nلا يمكن التراجع.`)) {
       try {
         await deleteDoc(doc(db, 'artifacts', appId, 'private', 'data', 'orders', d, 'items', order.id));
@@ -713,7 +728,7 @@ export default function App() {
     )) return;
     try {
       await updateDoc(
-        doc(db, 'artifacts', appId, 'private', 'data', 'orders', getDateStr(), 'items', order.id),
+        doc(db, 'artifacts', appId, 'private', 'data', 'orders', getDateStr(settings.dayCloseHour), 'items', order.id),
         { isGift: true, grandTotal: 0, cartTotal: 0, originalTotal, giftedAt: new Date().toISOString() }
       );
     } catch (e) { console.error(e); }
@@ -721,7 +736,7 @@ export default function App() {
 
   const handleConfirmDay = async () => {
     if (!window.confirm('تأكيد إنهاء اليوم؟\nسيتم نقل جميع الطلبات النشطة إلى منجزة وحفظ المبيعات.')) return;
-    const d = getDateStr();
+    const d = getDateStr(settings.dayCloseHour);
     // Move all still-active orders to finished first
     const activeNow = orders.filter(o => o.status === 'active');
     for (const o of activeNow) {
