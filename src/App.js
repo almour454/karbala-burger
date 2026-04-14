@@ -28,7 +28,7 @@ import {
  * 🛠️ CONFIGURATION
  */
 const localConfig = {
-  apiKey: "AIzaSyBi9O20ep4sQEfAQSvQAexHzzT1wjj8cHc",
+  apiKey: "process.env.REACT_APP_FIREBASE_API_KEY;",
   authDomain: "karbala-burger-app.firebaseapp.com",
   projectId: "karbala-burger-app",
   storageBucket: "karbala-burger-app.firebasestorage.app",
