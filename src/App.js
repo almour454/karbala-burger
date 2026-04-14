@@ -28,10 +28,10 @@ import {
  * 🛠️ CONFIGURATION
  */
 const localConfig = {
-  apiKey: "process.env.REACT_APP_FIREBASE_API_KEY;",
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
   authDomain: "karbala-burger-app.firebaseapp.com",
   projectId: "karbala-burger-app",
-  storageBucket: "karbala-burger-app.firebasestorage.app",
+  storageBucket: "karbala-burger-app.appspot.com", // note: should end with .appspot.com
   messagingSenderId: "112064338237",
   appId: "1:112064338237:web:93b7154a4504704d82cd54",
   measurementId: "G-XRPEGJZRHG"
