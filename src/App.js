@@ -328,7 +328,7 @@ export default function App() {
       (err) => console.error("Orders listener error:", err)
     );
     return () => unsub();
-  }, [isUnlocked, autoPrintEnabled, settings.printCopies]);
+  }, [isUnlocked, autoPrintEnabled, settings.printCopies, settings.dayCloseHour, todayStr]);
 
   // Midnight warning popup
   useEffect(() => {
@@ -356,7 +356,9 @@ export default function App() {
       );
       for (const o of toFinish) {
         try {
-          const orderDate = o.dateStr || getDateStr(settings.dayCloseHour);
+          const orderDate = o.dateStr
+            || (o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-CA') : null)
+            || getDateStr(settings.dayCloseHour);
           await updateDoc(
             doc(db, 'artifacts', appId, 'private', 'data', 'orders', orderDate, 'items', o.id),
             { status: "finished", finishedAt: new Date().toISOString() }
