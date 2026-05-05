@@ -814,14 +814,6 @@ export default function App() {
         </div>
       )}
 
-      {/* NAVIGATION - Fixed Bottom Pill */}
-      <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 999 }}>
-        <div className="flex bg-black/90 backdrop-blur-md p-1 rounded-full border border-white/10 shadow-2xl">
-          <button onClick={() => navigateTo("customer")} className={`px-8 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'customer' ? 'text-white shadow-lg' : 'text-slate-500'}`} style={view === 'customer' ? { backgroundColor: settings.primaryColor } : {}}>المنيو</button>
-          <button onClick={() => navigateTo("owner")} className={`px-8 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'owner' ? 'bg-white text-black shadow-lg' : 'text-slate-500'}`}>الإدارة</button>
-        </div>
-      </div>
-
       {dataError && (
         <div className="px-4 pb-2 max-w-xl mx-auto" dir="rtl">
           <div className="bg-red-500/15 border border-red-500/35 text-red-900 rounded-2xl px-4 py-3 text-xs sm:text-sm font-bold text-center">
@@ -2253,6 +2245,15 @@ export default function App() {
           )}
           </div>
           )} {/* end settingsLoaded */}
+
+          {/* NAVIGATION - Small pill at bottom of page */}
+          <div className="flex justify-center py-6">
+            <div className="flex bg-black/80 backdrop-blur-md p-0.5 rounded-full border border-white/10 shadow-lg">
+              <button onClick={() => navigateTo("customer")} className={`px-5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${view === 'customer' ? 'text-white' : 'text-slate-500'}`} style={view === 'customer' ? { backgroundColor: settings.primaryColor } : {}}>المنيو</button>
+              <button onClick={() => navigateTo("owner")} className={`px-5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${view === 'owner' ? 'bg-white text-black' : 'text-slate-500'}`}>الإدارة</button>
+            </div>
+          </div>
+
         </div>
       )}
 
