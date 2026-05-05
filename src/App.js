@@ -789,9 +789,33 @@ export default function App() {
 
   return (
     <div className="min-h-screen transition-colors duration-500" style={{ backgroundColor: settings.bgColor, fontFamily: 'sans-serif' }}>
-      
-      {/* NAVIGATION - Now Static (Not Sticky) */}
-      <div className="flex justify-center p-4">
+
+      {/* ── TOP TICKER ── */}
+      {view === "customer" && settingsLoaded && (
+        <div style={{ background: settings.primaryColor, overflow: 'hidden', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
+          <div style={{ display: 'flex', animation: 'tickerScroll 28s linear infinite', whiteSpace: 'nowrap', padding: '9px 0' }}>
+            {[...Array(4)].map((_, ri) => (
+              <span key={ri} style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+                {[
+                  `🍔 ${settings.restaurantNameAr || settings.restaurantName}`,
+                  `🕐 ${settings.openingHours || ''}`,
+                  `📍 ${settings.locationDesc || ''}`,
+                  ...discountItems.slice(0, 3).map(i => `🔥 عرض: ${i.name} — ${(i.salePrice||0).toLocaleString()} د.ع`),
+                  `📱 اطلب الآن عبر الواتساب`,
+                ].filter(t => t.trim().length > 3).map((text, ti) => (
+                  <span key={ti} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                    <span style={{ color: '#fff', fontSize: '11px', fontWeight: '800', padding: '0 18px', letterSpacing: '0.3px' }}>{text}</span>
+                    <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '9px' }}>◆</span>
+                  </span>
+                ))}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* NAVIGATION - Fixed Bottom Pill */}
+      <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 999 }}>
         <div className="flex bg-black/90 backdrop-blur-md p-1 rounded-full border border-white/10 shadow-2xl">
           <button onClick={() => navigateTo("customer")} className={`px-8 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'customer' ? 'text-white shadow-lg' : 'text-slate-500'}`} style={view === 'customer' ? { backgroundColor: settings.primaryColor } : {}}>المنيو</button>
           <button onClick={() => navigateTo("owner")} className={`px-8 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'owner' ? 'bg-white text-black shadow-lg' : 'text-slate-500'}`}>الإدارة</button>
@@ -2263,6 +2287,7 @@ export default function App() {
         .owner-panel h3[class*="text-orange"] { color: #ea580c !important; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.8s ease-out forwards; }
+        @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-25%); } }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
