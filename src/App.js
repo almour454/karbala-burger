@@ -784,6 +784,7 @@ export default function App() {
   const activeOrders   = orders.filter(o => o.status === 'active');
   const finishedOrders = orders.filter(o => o.status === 'finished');
   const finishedTotal  = finishedOrders.filter(o => !o.isGift).reduce((s, o) => s + (o.grandTotal || 0), 0);
+  const allDayTotal    = orders.filter(o => !o.isGift).reduce((s, o) => s + (o.grandTotal || 0), 0);
   const giftOrders     = finishedOrders.filter(o => o.isGift);
   const giftTotal      = giftOrders.reduce((s, o) => s + (o.originalTotal || 0), 0);
 
@@ -957,8 +958,8 @@ export default function App() {
                     <p className="text-white/30 text-[9px] font-bold mt-1">نشطة الآن</p>
                   </div>
                   <div className="bg-slate-900 rounded-2xl p-4 border border-white/5 text-center">
-                    <p className="font-black text-base leading-tight text-green-400">{finishedTotal.toLocaleString()} <span className="text-[9px]">د.ع</span></p>
-                    <p className="text-white/30 text-[9px] font-bold mt-1">مبيعات منجزة</p>
+                    <p className="font-black text-base leading-tight text-green-400">{allDayTotal.toLocaleString()} <span className="text-[9px]">د.ع</span></p>
+                    <p className="text-white/30 text-[9px] font-bold mt-1">مبيعات اليوم</p>
                   </div>
                 </div>
                 {giftOrders.length > 0 && (
@@ -2246,77 +2247,13 @@ export default function App() {
           </div>
           )} {/* end settingsLoaded */}
 
-          {/* ── SEXY FOOTER ── */}
-          {settingsLoaded && (
-          <div style={{ position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%)', padding: '48px 24px 40px', marginTop: '32px', borderTop: `3px solid ${settings.primaryColor}` }}>
-            {/* animated glow orbs */}
-            <div style={{ position: 'absolute', top: '-60px', right: '-60px', width: '200px', height: '200px', borderRadius: '50%', background: settings.primaryColor, filter: 'blur(80px)', opacity: 0.12, animation: 'footerOrb1 6s ease-in-out infinite' }} />
-            <div style={{ position: 'absolute', bottom: '-40px', left: '-40px', width: '160px', height: '160px', borderRadius: '50%', background: settings.primaryColor, filter: 'blur(60px)', opacity: 0.08, animation: 'footerOrb2 8s ease-in-out infinite' }} />
-            {/* grid lines overlay */}
-            <div style={{ position: 'absolute', inset: 0, backgroundImage: `linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)`, backgroundSize: '40px 40px', pointerEvents: 'none' }} />
-
-            <div style={{ position: 'relative', zIndex: 1, maxWidth: '480px', margin: '0 auto', direction: 'rtl' }}>
-
-              {/* restaurant name big */}
-              <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', letterSpacing: '4px', textTransform: 'uppercase', marginBottom: '8px', fontWeight: '700' }}>نظام الطلبات الذكي</div>
-                <div style={{ fontSize: '26px', fontWeight: '900', color: '#fff', lineHeight: 1.2, textShadow: `0 0 30px ${settings.primaryColor}60` }}>
-                  {settings.restaurantNameAr || settings.restaurantName}
-                </div>
-                <div style={{ width: '50px', height: '2px', background: settings.primaryColor, margin: '12px auto 0', borderRadius: '2px', boxShadow: `0 0 12px ${settings.primaryColor}` }} />
-              </div>
-
-              {/* info row */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '28px' }}>
-                {settings.openingHours && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '16px' }}>🕐</span>
-                    <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: '600' }}>{settings.openingHours}</span>
-                  </div>
-                )}
-                {settings.locationDesc && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '16px' }}>📍</span>
-                    <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: '600' }}>{settings.locationDesc}</span>
-                  </div>
-                )}
-                {settings.whatsapp && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '16px' }}>💬</span>
-                    <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: '600', direction: 'ltr' }}>{settings.whatsapp}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* social icons row */}
-              <div style={{ display: 'flex', gap: '12px', marginBottom: '28px', justifyContent: 'center' }}>
-                {settings.instagramUrl && (
-                  <a href={settings.instagramUrl} target="_blank" rel="noreferrer" style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', textDecoration: 'none' }}>📸</a>
-                )}
-                {settings.facebookUrl && (
-                  <a href={settings.facebookUrl} target="_blank" rel="noreferrer" style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', textDecoration: 'none' }}>📘</a>
-                )}
-                {settings.tiktokUrl && (
-                  <a href={settings.tiktokUrl} target="_blank" rel="noreferrer" style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', textDecoration: 'none' }}>🎵</a>
-                )}
-              </div>
-
-              {/* nav pill */}
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
-                <div style={{ display: 'flex', background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(10px)', padding: '3px', borderRadius: '50px', border: '1px solid rgba(255,255,255,0.12)' }}>
-                  <button onClick={() => navigateTo("customer")} style={{ padding: '8px 22px', borderRadius: '50px', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', textTransform: 'uppercase', border: 'none', cursor: 'pointer', transition: 'all 0.2s', background: view === 'customer' ? settings.primaryColor : 'transparent', color: view === 'customer' ? '#fff' : 'rgba(255,255,255,0.35)' }}>المنيو</button>
-                  <button onClick={() => navigateTo("owner")} style={{ padding: '8px 22px', borderRadius: '50px', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', textTransform: 'uppercase', border: 'none', cursor: 'pointer', transition: 'all 0.2s', background: view === 'owner' ? '#fff' : 'transparent', color: view === 'owner' ? '#000' : 'rgba(255,255,255,0.35)' }}>الإدارة</button>
-                </div>
-              </div>
-
-              {/* powered by */}
-              <div style={{ textAlign: 'center' }}>
-                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', letterSpacing: '2px', fontWeight: '600' }}>POWERED BY SYNAPSE DEV</span>
-              </div>
-
+          {/* NAV PILL - bottom of page */}
+          <div className="flex justify-center py-8">
+            <div className="flex bg-black/90 backdrop-blur-md p-1 rounded-full border border-white/10 shadow-2xl">
+              <button onClick={() => navigateTo("customer")} className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'customer' ? 'text-white shadow-lg' : 'text-slate-500'}`} style={view === 'customer' ? { backgroundColor: settings.primaryColor } : {}}>المنيو</button>
+              <button onClick={() => navigateTo("owner")} className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'owner' ? 'bg-white text-black shadow-lg' : 'text-slate-500'}`}>الإدارة</button>
             </div>
           </div>
-          )}
 
         </div>
       )}
@@ -2353,8 +2290,6 @@ export default function App() {
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.8s ease-out forwards; }
         @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-25%); } }
-        @keyframes footerOrb1 { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-20px, 15px) scale(1.1); } }
-        @keyframes footerOrb2 { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(15px, -10px) scale(1.08); } }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
