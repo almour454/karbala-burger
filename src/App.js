@@ -2132,7 +2132,7 @@ export default function App() {
               const hasSale = item.salePrice != null && Number(item.salePrice) < Number(item.price);
               const discPct  = hasSale ? Math.round(((Number(item.price) - Number(item.salePrice)) / Number(item.price)) * 100) : 0;
               return (
-                <div key={item.id} className="bg-white rounded-2xl sm:rounded-3xl overflow-hidden border border-black/[0.06] shadow-sm hover:shadow-xl transition-all duration-300 group flex flex-col">
+                <div key={item.id} className="menu-card rounded-2xl sm:rounded-3xl overflow-hidden group flex flex-col" style={{ '--brand': settings.primaryColor }}>
 
                   {/* ── IMAGE ── */}
                   <div className="relative w-full overflow-hidden bg-slate-50" style={{ aspectRatio: '4/3' }}>
@@ -2201,7 +2201,81 @@ export default function App() {
             })}
           </main>
 
-          {/* FOOTER CART */}
+          {/* ── SITE FOOTER ── */}
+          <footer className="mt-16" style={{ background: `linear-gradient(160deg, ${settings.primaryColor} 0%, #140800 100%)` }}>
+            <div className="max-w-4xl mx-auto px-6 pt-12 pb-8" dir="rtl">
+
+              {/* Logo + Name */}
+              <div className="flex flex-col items-center text-center mb-10">
+                {settings.logoUrl && (
+                  <img src={settings.logoUrl} alt={settings.restaurantName}
+                    className="w-16 h-16 object-contain mb-4 opacity-90"
+                    style={{ filter: 'brightness(0) invert(1)' }}
+                    onError={e => e.target.style.display='none'} />
+                )}
+                <h2 className="text-white font-black text-2xl italic uppercase tracking-tight leading-tight">{settings.restaurantName}</h2>
+                {settings.restaurantNameAr && <p className="text-white/50 font-bold text-sm mt-1">{settings.restaurantNameAr}</p>}
+                <div className="mt-4 w-12 h-0.5 bg-white/20 rounded-full" />
+              </div>
+
+              {/* Info grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10 text-center">
+                <div>
+                  <p className="text-white/35 text-[9px] font-black uppercase tracking-widest mb-2">ساعات العمل</p>
+                  <p className="text-white/80 font-bold text-sm leading-snug">{settings.openingHours}</p>
+                </div>
+                <div>
+                  <p className="text-white/35 text-[9px] font-black uppercase tracking-widest mb-2">الموقع</p>
+                  <p className="text-white/80 font-bold text-sm leading-snug">{settings.locationDesc}</p>
+                </div>
+                {settings.whatsapp && (
+                  <div>
+                    <p className="text-white/35 text-[9px] font-black uppercase tracking-widest mb-2">واتساب</p>
+                    <a href={`https://wa.me/${digitsOnly(settings.whatsapp)}`} target="_blank" rel="noreferrer"
+                      className="text-white/80 hover:text-white font-bold text-sm transition-colors" dir="ltr">
+                      +{digitsOnly(settings.whatsapp)}
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Social icons */}
+              {(settings.facebookUrl || settings.instagramUrl || settings.tiktokUrl) && (
+                <div className="flex justify-center gap-3 mb-10">
+                  {settings.facebookUrl && (
+                    <a href={settings.facebookUrl} target="_blank" rel="noreferrer"
+                      className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/25 flex items-center justify-center transition-all">
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><path d="M13.5 8.5V6.8c0-.8.5-1.1 1.2-1.1H16V3h-2.1C11.6 3 10.5 4.4 10.5 6.2v2.3H9v2.8h1.5V21h3V11.3h2.1l.3-2.8h-2.4z"/></svg>
+                    </a>
+                  )}
+                  {settings.instagramUrl && (
+                    <a href={settings.instagramUrl} target="_blank" rel="noreferrer"
+                      className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/25 flex items-center justify-center transition-all">
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-white fill-none" strokeWidth="2"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="white" stroke="none"/></svg>
+                    </a>
+                  )}
+                  {settings.tiktokUrl && (
+                    <a href={settings.tiktokUrl} target="_blank" rel="noreferrer"
+                      className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/25 flex items-center justify-center transition-all">
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><path d="M14.8 3h2.6c.2 1.5 1.3 2.8 2.6 3.3v2.7c-1.3 0-2.6-.4-3.7-1.1v6.3c0 3-2.4 5.4-5.4 5.4a5.4 5.4 0 1 1 0-10.8c.3 0 .6 0 .9.1v2.7a2.8 2.8 0 1 0 1.9 2.7V3z"/></svg>
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {/* Bottom bar */}
+              <div className="border-t border-white/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <p className="text-white/25 text-[10px] font-bold text-center sm:text-right">
+                  جميع الحقوق محفوظة © {new Date().getFullYear()} — {settings.restaurantName}
+                </p>
+                <a href="https://synapse.dev" target="_blank" rel="noreferrer"
+                  className="text-white/35 hover:text-white/70 text-[10px] font-black uppercase tracking-widest transition-colors">
+                  صُنع بواسطة synapse.dev ⚡
+                </a>
+              </div>
+
+            </div>
+          </footer>
           {cartTotal > 0 && (
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-md px-4">
               <button
@@ -2407,6 +2481,25 @@ export default function App() {
       )}
 
       <style dangerouslySetInnerHTML={{ __html: `
+        /* ── MENU CARDS — glass + hover dance ── */
+        .menu-card {
+          background: rgba(255, 255, 255, 0.70);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+          border: 1px solid rgba(255, 255, 255, 0.82);
+          box-shadow: 0 2px 10px rgba(0,0,0,0.055), 0 1px 3px rgba(0,0,0,0.04);
+          transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+          will-change: transform;
+        }
+        .menu-card:hover {
+          transform: translateY(-8px) rotate(-0.5deg);
+          box-shadow: 0 24px 56px rgba(0,0,0,0.11), 0 8px 20px color-mix(in srgb, var(--brand) 28%, transparent), 0 1px 0 rgba(255,255,255,0.9) inset;
+        }
+        .menu-card:active {
+          transform: translateY(-2px) rotate(0.4deg);
+          transition: transform 0.1s ease;
+        }
+
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
