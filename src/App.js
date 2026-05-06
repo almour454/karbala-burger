@@ -2116,56 +2116,89 @@ export default function App() {
             </section>
           )}
 
-          {/* CATEGORIES - Not Sticky anymore */}
-          <div className="py-4 bg-transparent">
-            <div className="max-w-6xl mx-auto flex gap-2 px-6 overflow-x-auto no-scrollbar justify-start md:justify-center" dir="rtl">
-              <button onClick={() => setActiveCategory("الكل")} className={`shrink-0 px-8 py-3.5 rounded-2xl text-[12px] font-black transition-all ${activeCategory === "الكل" ? 'bg-black text-white shadow-xl' : 'bg-white text-slate-400 border border-black/5'}`}>الكل</button>
+          {/* CATEGORIES */}
+          <div className="py-3 bg-transparent">
+            <div className="max-w-6xl mx-auto flex gap-2 px-3 sm:px-6 overflow-x-auto no-scrollbar justify-start md:justify-center" dir="rtl">
+              <button onClick={() => setActiveCategory("الكل")} className={`shrink-0 px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-[12px] font-black transition-all ${activeCategory === "الكل" ? 'bg-black text-white shadow-lg' : 'bg-white text-slate-400 border border-black/5'}`}>الكل</button>
               {categories.map(cat => (
-                <button key={cat} onClick={() => setActiveCategory(cat)} className={`shrink-0 px-8 py-3.5 rounded-2xl text-[12px] font-black transition-all ${activeCategory === cat ? 'text-white shadow-xl' : 'bg-white text-slate-400 border border-black/5'}`} style={activeCategory === cat ? { backgroundColor: settings.primaryColor } : {}}>{cat}</button>
+                <button key={cat} onClick={() => setActiveCategory(cat)} className={`shrink-0 px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-[12px] font-black transition-all ${activeCategory === cat ? 'text-white shadow-lg' : 'bg-white text-slate-400 border border-black/5'}`} style={activeCategory === cat ? { backgroundColor: settings.primaryColor } : {}}>{cat}</button>
               ))}
             </div>
           </div>
 
           {/* MENU */}
-          <main className="max-w-6xl mx-auto px-6 py-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8" dir="rtl">
-            {filteredItems.map(item => (
-                <div key={item.id} className="bg-white rounded-[2.5rem] p-4 flex flex-col border border-black/5 shadow-lg hover:shadow-2xl transition-all group">
-                  <div className="w-full aspect-square rounded-[2rem] overflow-hidden bg-slate-50 mb-5 relative">
-                    <img src={item.image || PLACEHOLDER} alt={item.name || "menu item"} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" onError={(e) => e.target.src = PLACEHOLDER} />
+          <main className="max-w-6xl mx-auto px-3 sm:px-6 py-6 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5" dir="rtl">
+            {filteredItems.map(item => {
+              const hasSale = item.salePrice != null && Number(item.salePrice) < Number(item.price);
+              const discPct  = hasSale ? Math.round(((Number(item.price) - Number(item.salePrice)) / Number(item.price)) * 100) : 0;
+              return (
+                <div key={item.id} className="bg-white rounded-2xl sm:rounded-3xl overflow-hidden border border-black/[0.06] shadow-sm hover:shadow-xl transition-all duration-300 group flex flex-col">
+
+                  {/* ── IMAGE ── */}
+                  <div className="relative w-full overflow-hidden bg-slate-50" style={{ aspectRatio: '4/3' }}>
+                    <img
+                      src={item.image || PLACEHOLDER}
+                      alt={item.name || "menu item"}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      onError={e => e.target.src = PLACEHOLDER}
+                    />
+                    {/* gradient scrim at bottom of image */}
+                    <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
+                    {/* category pill */}
+                    <span className="absolute top-2 right-2 text-[8px] sm:text-[9px] font-black px-2 py-0.5 rounded-full bg-black/50 text-white backdrop-blur-sm leading-tight">
+                      {item.category}
+                    </span>
+                    {/* discount badge */}
+                    {hasSale && (
+                      <span className="absolute top-2 left-2 text-[8px] sm:text-[9px] font-black px-2 py-0.5 rounded-full text-white leading-tight"
+                        style={{ backgroundColor: settings.primaryColor }}>
+                        -{discPct}%
+                      </span>
+                    )}
                   </div>
-                  <div className="flex-1 flex flex-col justify-between px-2">
-                    <div className="mb-4">
-                      <h3 className="text-lg font-black text-slate-900 leading-tight mb-1">{item.name}</h3>
-                      <p className="text-[10px] text-slate-400 font-bold leading-tight">{item.desc || "طعم لا ينسى"}</p>
-                    </div>
-                    <div className="flex justify-between items-end gap-2">
-                      {item.salePrice != null && Number(item.salePrice) < Number(item.price) ? (
-                        <div className="flex flex-col items-start gap-0.5 min-w-0">
-                          <p className="text-[11px] font-black text-slate-400 leading-tight">
-                            <span className="line-through decoration-2 decoration-red-500 decoration-skip-ink-none">{Number(item.price || 0).toLocaleString()}</span>
-                            <span className="text-[9px] mr-0.5"> د.ع</span>
+
+                  {/* ── CONTENT ── */}
+                  <div className="flex flex-col flex-1 p-2.5 sm:p-4">
+                    <h3 className="text-[12px] sm:text-sm font-black text-slate-900 leading-tight line-clamp-1 mb-0.5">{item.name}</h3>
+                    <p className="text-[9px] sm:text-[10px] text-slate-400 font-medium leading-tight line-clamp-1 mb-2.5">{item.desc || "طعم لا ينسى"}</p>
+
+                    <div className="flex items-end justify-between gap-1 mt-auto">
+                      {/* price */}
+                      <div>
+                        {hasSale ? (
+                          <>
+                            <p className="text-[9px] sm:text-[10px] text-slate-400 line-through leading-none mb-0.5">{Number(item.price || 0).toLocaleString()} <span className="text-[8px]">د.ع</span></p>
+                            <p className="text-[13px] sm:text-base font-black leading-none" style={{ color: settings.primaryColor }}>
+                              {Number(item.salePrice).toLocaleString()} <span className="text-[9px] font-bold">د.ع</span>
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-[13px] sm:text-base font-black leading-none" style={{ color: settings.primaryColor }}>
+                            {Number(item.price || 0).toLocaleString()} <span className="text-[9px] font-bold">د.ع</span>
                           </p>
-                          <p className="font-black text-lg tracking-tighter leading-tight" style={{ color: settings.primaryColor }}>
-                            {Number(item.salePrice).toLocaleString()} <span className="text-[10px]">د.ع</span>
-                          </p>
-                          <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 mt-0.5">عرض 🔥</span>
-                        </div>
-                      ) : (
-                        <p className="font-black text-lg tracking-tighter self-end" style={{ color: settings.primaryColor }}>{Number(item.price || 0).toLocaleString()} <span className="text-[10px]">د.ع</span></p>
-                      )}
+                        )}
+                      </div>
+
+                      {/* add / counter */}
                       {cart[item.id] ? (
-                        <div className="flex items-center bg-slate-100 rounded-xl p-1 shrink-0">
-                          <button type="button" onClick={() => removeFromCart(item.id)} className="w-8 h-8 font-black hover:bg-white rounded-lg leading-none">－</button>
-                          <span className="w-6 text-center font-black text-xs">{cart[item.id]}</span>
-                          <button type="button" onClick={() => addToCart(item)} className="w-8 h-8 font-black hover:bg-white rounded-lg leading-none">＋</button>
+                        <div className="flex items-center bg-slate-100 rounded-xl p-0.5 shrink-0">
+                          <button type="button" onClick={() => removeFromCart(item.id)} className="w-6 h-6 sm:w-7 sm:h-7 font-black hover:bg-white rounded-lg leading-none text-slate-700 text-sm">－</button>
+                          <span className="w-5 text-center font-black text-xs text-slate-900">{cart[item.id]}</span>
+                          <button type="button" onClick={() => addToCart(item)} className="w-6 h-6 sm:w-7 sm:h-7 font-black hover:bg-white rounded-lg leading-none text-slate-700 text-sm">＋</button>
                         </div>
                       ) : (
-                        <button type="button" onClick={() => addToCart(item)} className="px-5 py-2.5 bg-black text-white rounded-xl font-black text-[10px] uppercase shrink-0">إضافة +</button>
+                        <button type="button" onClick={() => addToCart(item)}
+                          className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl font-black text-white text-base flex items-center justify-center shrink-0 active:scale-90 transition-transform shadow-md"
+                          style={{ backgroundColor: settings.primaryColor }}>
+                          +
+                        </button>
                       )}
                     </div>
                   </div>
+
                 </div>
-            ))}
+              );
+            })}
           </main>
 
           {/* FOOTER CART */}
