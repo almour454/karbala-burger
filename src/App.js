@@ -233,6 +233,7 @@ export default function App() {
   const [resetUnlocked, setResetUnlocked] = useState(false);
   const [searchResult, setSearchResult] = useState(null); // null | "found" | "notfound"
   const [historySearchNum, setHistorySearchNum] = useState("");
+  const [receiptModal,     setReceiptModal]     = useState(null);
 
   // today's date string "YYYY-MM-DD" in local time
   // todayStr respects dayCloseHour — if it's 12:30am and closeHour is 1,
@@ -880,6 +881,11 @@ export default function App() {
   };
 
   const printOrderReceipt = (order) => {
+    // On touch/mobile devices → show beautiful receipt modal instead of print dialog
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+      setReceiptModal(order);
+      return;
+    }
     const win = window.open('', '_blank', 'width=240,height=400');
     if (!win) return;
     win.document.write(buildReceiptHtml(order));
@@ -2707,6 +2713,82 @@ export default function App() {
                     </div>
                   );
                 })()}
+              </div>
+            </div>
+          )}
+
+          {/* ── RECEIPT MODAL (mobile) — shows instead of print dialog ── */}
+          {receiptModal && (
+            <div className="fixed inset-0 z-[5000] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+              onClick={() => setReceiptModal(null)}>
+              <div className="bg-white w-full max-w-[300px] rounded-3xl overflow-hidden shadow-2xl animate-slide-up" dir="rtl"
+                onClick={e => e.stopPropagation()}>
+
+                {/* Header */}
+                <div className="bg-green-500 px-6 py-4 text-center">
+                  <p className="text-white text-[10px] font-black uppercase tracking-[0.2em] mb-0.5">🔔 طلب جديد وصل</p>
+                  <p className="text-white/70 text-[9px] font-bold">{settings.restaurantName}</p>
+                </div>
+
+                {/* Thermal receipt body */}
+                <div className="px-6 py-5" style={{ fontFamily:"'Courier New', monospace" }}>
+                  {/* Order number */}
+                  <div className="text-center mb-4">
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1">رقم الطلب</p>
+                    <p className="text-7xl font-black text-slate-900 leading-none tracking-tighter" style={{ color: settings.primaryColor }}>
+                      #{receiptModal.orderNumber || '—'}
+                    </p>
+                  </div>
+
+                  <div className="border-t-2 border-dashed border-slate-200 my-3" />
+
+                  {/* Customer info */}
+                  <div className="space-y-1 mb-3">
+                    <p className="text-[12px] font-black text-slate-900">{receiptModal.customerName}</p>
+                    <p className="text-[10px] text-slate-500 font-bold" dir="ltr">{receiptModal.customerPhone}</p>
+                    {receiptModal.address && <p className="text-[10px] text-slate-500 font-bold">📍 {receiptModal.address}</p>}
+                  </div>
+
+                  <div className="border-t-2 border-dashed border-slate-200 my-3" />
+
+                  {/* Items */}
+                  <div className="space-y-2 mb-3">
+                    {(receiptModal.items || []).map((it, i) => (
+                      <div key={i} className="flex justify-between items-center">
+                        <span className="text-[11px] font-black text-slate-800">{it.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-400 font-bold">×{it.qty}</span>
+                          <span className="text-[10px] text-slate-600 font-bold">{((it.price||0)*it.qty).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                    {receiptModal.deliveryFee > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] text-slate-400 font-bold">توصيل</span>
+                        <span className="text-[10px] text-slate-500 font-bold">{receiptModal.deliveryFee.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t-2 border-dashed border-slate-200 my-3" />
+
+                  {/* Total */}
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-[12px] font-black text-slate-900">الإجمالي</span>
+                    <span className="text-2xl font-black" style={{ color: settings.primaryColor }}>
+                      {(receiptModal.grandTotal || 0).toLocaleString()} <span className="text-sm">د.ع</span>
+                    </span>
+                  </div>
+
+                  <p className="text-center text-[10px] text-slate-400 font-bold">شكراً لطلبك — {settings.restaurantName}</p>
+                </div>
+
+                {/* Close */}
+                <button onClick={() => setReceiptModal(null)}
+                  className="w-full py-4 text-white font-black text-[11px] uppercase tracking-widest transition-all active:opacity-80"
+                  style={{ backgroundColor: settings.primaryColor }}>
+                  تم الاستلام ✓
+                </button>
               </div>
             </div>
           )}
