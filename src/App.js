@@ -794,7 +794,7 @@ export default function App() {
       {/* ── TOP TICKER ── */}
       {view === "customer" && settingsLoaded && (
         <div style={{ background: settings.primaryColor, overflow: 'hidden', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-          <div style={{ display: 'flex', animation: 'tickerScroll 9s linear infinite', whiteSpace: 'nowrap', padding: '9px 0' }}>
+          <div style={{ display: 'flex', animation: 'tickerScroll 5s linear infinite', whiteSpace: 'nowrap', padding: '9px 0' }}>
             {[...Array(4)].map((_, ri) => (
               <span key={ri} style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
                 {[
@@ -1870,36 +1870,109 @@ export default function App() {
             <div className="hero-breath-bg pointer-events-none absolute inset-0"
               style={{ background: `radial-gradient(ellipse 75% 60% at 50% 30%, ${settings.primaryColor}22 0%, transparent 70%)` }} />
 
-            {/* ── E: FLOATING PARTICLES ── */}
+            {/* ── E: FLOATING FOOD PARTICLES ── */}
             {[
-              { size: 5, left: '12%',  delay: '0s',    dur: '6s'  },
-              { size: 3, left: '28%',  delay: '1.2s',  dur: '8s'  },
-              { size: 4, left: '50%',  delay: '0.4s',  dur: '7s'  },
-              { size: 3, left: '65%',  delay: '2s',    dur: '9s'  },
-              { size: 5, left: '80%',  delay: '0.8s',  dur: '6.5s'},
-              { size: 3, left: '92%',  delay: '1.6s',  dur: '7.5s'},
-            ].map((p, i) => (
-              <span key={i} className="hero-particle pointer-events-none absolute bottom-0 rounded-full"
-                style={{
-                  width: p.size, height: p.size,
-                  left: p.left,
-                  backgroundColor: `${settings.primaryColor}55`,
-                  animationDelay: p.delay,
-                  animationDuration: p.dur,
-                }} />
-            ))}
+              // type, left%, delay, dur, scale, rot
+              { t:'burger',    left:'5%',  delay:'0s',    dur:'7s',   sc:0.85, rot:'-12deg' },
+              { t:'fries',     left:'14%', delay:'2.4s',  dur:'9s',   sc:0.7,  rot:'8deg'  },
+              { t:'pizza',     left:'24%', delay:'0.8s',  dur:'8s',   sc:0.9,  rot:'-6deg' },
+              { t:'chicken',   left:'35%', delay:'3.1s',  dur:'6.5s', sc:0.75, rot:'15deg' },
+              { t:'sandwich',  left:'46%', delay:'1.5s',  dur:'7.5s', sc:0.8,  rot:'-10deg'},
+              { t:'burger',    left:'57%', delay:'4s',    dur:'8.5s', sc:0.65, rot:'6deg'  },
+              { t:'fries',     left:'67%', delay:'0.3s',  dur:'7s',   sc:0.9,  rot:'-18deg'},
+              { t:'pizza',     left:'76%', delay:'2s',    dur:'9.5s', sc:0.7,  rot:'12deg' },
+              { t:'chicken',   left:'85%', delay:'1.1s',  dur:'6s',   sc:0.85, rot:'-8deg' },
+              { t:'sandwich',  left:'93%', delay:'3.5s',  dur:'8s',   sc:0.75, rot:'20deg' },
+              { t:'burger',    left:'31%', delay:'5s',    dur:'7.5s', sc:0.6,  rot:'-5deg' },
+              { t:'pizza',     left:'61%', delay:'1.8s',  dur:'10s',  sc:0.65, rot:'9deg'  },
+            ].map((p, i) => {
+              const svgs = {
+                burger: (
+                  <svg viewBox="0 0 32 24" width="32" height="24" xmlns="http://www.w3.org/2000/svg">
+                    <ellipse cx="16" cy="21" rx="13" ry="3" fill="#C8854A"/>
+                    <ellipse cx="16" cy="17" rx="12" ry="3" fill="#5C2E0A"/>
+                    <path d="M3 14 Q7 11 11 14 Q14 11 16 14 Q20 11 24 14 Q27 11 29 14" fill="none" stroke="#5B8C3A" strokeWidth="2.5" strokeLinecap="round"/>
+                    <ellipse cx="16" cy="10" rx="12" ry="5.5" fill="#E8A25C"/>
+                    <ellipse cx="16" cy="8.5" rx="10" ry="4" fill="#D4894A"/>
+                    <circle cx="12" cy="7" r="1.3" fill="#C8854A" opacity="0.7"/>
+                    <circle cx="16.5" cy="6" r="1.3" fill="#C8854A" opacity="0.7"/>
+                    <circle cx="21" cy="7" r="1.3" fill="#C8854A" opacity="0.7"/>
+                  </svg>
+                ),
+                fries: (
+                  <svg viewBox="0 0 20 26" width="20" height="26" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="1.5" y="2" width="3.5" height="13" rx="1.75" fill="#FFD54F"/>
+                    <rect x="6.5" y="0" width="3.5" height="15" rx="1.75" fill="#FFE082"/>
+                    <rect x="11" y="1" width="3.5" height="13.5" rx="1.75" fill="#FFCA28"/>
+                    <rect x="15.5" y="3" width="3" height="11" rx="1.5" fill="#FFD54F"/>
+                    <path d="M0.5 14 L2.5 24.5 L17.5 24.5 L19.5 14 Z" fill="#E53935"/>
+                    <path d="M0.5 14 L19.5 14" stroke="#C62828" strokeWidth="1.2"/>
+                    <rect x="7" y="16" width="6" height="1.5" rx="0.75" fill="#FF7043" opacity="0.5"/>
+                  </svg>
+                ),
+                pizza: (
+                  <svg viewBox="0 0 26 28" width="26" height="28" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M13 2 L24 25 L2 25 Z" fill="#FFA726"/>
+                    <path d="M2 25 Q13 29.5 24 25 L22 25 Q13 28 4 25 Z" fill="#D4956A"/>
+                    <circle cx="13" cy="16" r="2.5" fill="#E53935"/>
+                    <circle cx="8.5" cy="20" r="2" fill="#E53935"/>
+                    <circle cx="17.5" cy="20" r="2" fill="#E53935"/>
+                    <circle cx="11" cy="11" r="1.5" fill="#E53935"/>
+                    <circle cx="16" cy="10" r="1.2" fill="#66BB6A" opacity="0.9"/>
+                    <circle cx="9" cy="14" r="1.2" fill="#66BB6A" opacity="0.9"/>
+                  </svg>
+                ),
+                chicken: (
+                  <svg viewBox="0 0 22 28" width="22" height="28" xmlns="http://www.w3.org/2000/svg">
+                    <ellipse cx="11" cy="9" rx="8" ry="7" fill="#C87A3E"/>
+                    <ellipse cx="11" cy="9.5" rx="6.5" ry="5.5" fill="#E09B5A"/>
+                    <path d="M8.5 13 Q9.5 12 11 12.5 Q12.5 12 13.5 13" fill="none" stroke="#A05C28" strokeWidth="1.2" strokeLinecap="round"/>
+                    <rect x="9" y="15" width="4" height="9" rx="2" fill="#F0E0C8"/>
+                    <ellipse cx="11" cy="25" rx="4" ry="2.5" fill="#F0E0C8"/>
+                    <ellipse cx="11" cy="24.5" rx="2.5" ry="1.5" fill="#E8D0B0"/>
+                  </svg>
+                ),
+                sandwich: (
+                  <svg viewBox="0 0 30 20" width="30" height="20" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M1.5 8 Q15 1.5 28.5 8 L28.5 10 Q15 3.5 1.5 10 Z" fill="#E8A25C"/>
+                    <path d="M1.5 10 Q15 3.5 28.5 10 L28.5 11.5 Q15 5.5 1.5 11.5 Z" fill="#FFE082" opacity="0.8"/>
+                    <rect x="1.5" y="11.5" width="27" height="2" fill="#5B8C3A"/>
+                    <rect x="1.5" y="13" width="27" height="1.5" fill="#E53935"/>
+                    <path d="M1.5 14.5 L1.5 17.5 Q15 19 28.5 17.5 L28.5 14.5 Q15 16.5 1.5 14.5 Z" fill="#D4956A"/>
+                  </svg>
+                ),
+              };
+              return (
+                <span key={i} className="hero-food-particle pointer-events-none absolute"
+                  style={{
+                    left: p.left,
+                    bottom: '-10px',
+                    '--rot': p.rot,
+                    '--sc': p.sc,
+                    transformOrigin: 'center bottom',
+                    animationDelay: p.delay,
+                    animationDuration: p.dur,
+                    opacity: 0,
+                  }}>
+                  {svgs[p.t]}
+                </span>
+              );
+            })}
 
             {/* ── D: STAGGERED ENTRANCE — LOGO ── */}
             <div className="hero-enter-0">
-              {/* ── B: FLOATING LOGO ── */}
+              {/* ── B: FLOATING LOGO — clean atmospheric glow, no box ── */}
               {settings.logoUrl ? (
                 <div className="flex justify-center mb-6">
-                  <div className="relative logo-float">
-                    {/* glow ring */}
-                    <div className="absolute inset-0 rounded-full logo-ring-pulse"
-                      style={{ boxShadow: `0 0 0 8px ${settings.primaryColor}22, 0 0 0 16px ${settings.primaryColor}0d` }} />
-                    <div className="w-32 h-32 overflow-hidden relative z-10"
-                      style={{ filter: `drop-shadow(0 20px 40px ${settings.primaryColor}55)` }}>
+                  <div className="relative" style={{ width: 128, height: 128 }}>
+                    {/* atmospheric radial glow — no hard edges, perfectly centered */}
+                    <div className="logo-ring-pulse absolute rounded-full pointer-events-none"
+                      style={{
+                        inset: -24,
+                        background: `radial-gradient(circle, ${settings.primaryColor}30 0%, ${settings.primaryColor}0a 55%, transparent 75%)`,
+                      }} />
+                    <div className="logo-float w-full h-full relative z-10"
+                      style={{ filter: `drop-shadow(0 16px 32px ${settings.primaryColor}55)` }}>
                       <img src={settings.logoUrl} alt={settings.restaurantName}
                         className="w-full h-full object-contain"
                         onError={e => e.target.style.display='none'} />
@@ -1908,10 +1981,13 @@ export default function App() {
                 </div>
               ) : (
                 <div className="flex justify-center mb-6">
-                  <div className="relative logo-float">
-                    <div className="absolute inset-0 rounded-[2rem] logo-ring-pulse"
-                      style={{ boxShadow: `0 0 0 8px ${settings.primaryColor}22, 0 0 0 16px ${settings.primaryColor}0d` }} />
-                    <div className="relative z-10 w-28 h-28 rounded-[2rem] flex items-center justify-center"
+                  <div className="relative" style={{ width: 112, height: 112 }}>
+                    <div className="logo-ring-pulse absolute rounded-[2rem] pointer-events-none"
+                      style={{
+                        inset: -20,
+                        background: `radial-gradient(circle, ${settings.primaryColor}30 0%, transparent 70%)`,
+                      }} />
+                    <div className="logo-float w-full h-full relative z-10 rounded-[2rem] flex items-center justify-center"
                       style={{
                         background: `linear-gradient(135deg, ${settings.primaryColor} 0%, #7c2d12 100%)`,
                         boxShadow: `0 20px 60px ${settings.primaryColor}50`
@@ -2381,14 +2457,16 @@ export default function App() {
         .hero-enter-2 { animation: heroEnterUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.3s both; }
         .hero-enter-3 { animation: heroEnterUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.45s both; }
 
-        /* ── E: FLOATING PARTICLES ── */
-        @keyframes particleDrift {
-          0%   { transform: translateY(0) translateX(0) scale(1); opacity: 0; }
-          15%  { opacity: 1; }
-          85%  { opacity: 0.6; }
-          100% { transform: translateY(-90px) translateX(10px) scale(0.6); opacity: 0; }
+        /* ── E: FLOATING FOOD PARTICLES ── */
+        @keyframes foodFloat {
+          0%   { transform: translateY(0)    translateX(0)    rotate(var(--rot)) scale(var(--sc)); opacity: 0; }
+          8%   { opacity: 0.75; }
+          40%  { transform: translateY(-55%) translateX(8px)  rotate(calc(var(--rot) + 8deg))  scale(var(--sc)); }
+          70%  { transform: translateY(-78%) translateX(-6px) rotate(calc(var(--rot) - 5deg))  scale(var(--sc)); }
+          90%  { opacity: 0.5; }
+          100% { transform: translateY(-105%) translateX(4px) rotate(calc(var(--rot) + 12deg)) scale(var(--sc)); opacity: 0; }
         }
-        .hero-particle { animation: particleDrift linear infinite; position: absolute; }
+        .hero-food-particle { animation: foodFloat ease-in-out infinite; }
         @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-25%); } }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
