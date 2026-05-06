@@ -651,6 +651,32 @@ export default function App() {
     navigateTo('customer');
   };
 
+  // ── SEED REAL FIREBASE MENU ──
+  const handleSeedRealMenu = async () => {
+    if (!user || isDemoMode) return;
+    if (!window.confirm('سيتم إضافة ' + DEMO_SEED_ITEMS.length + ' وجبات نموذجية بصور عالية الجودة إلى منيوك.\n\nالعناصر الحالية لن تُحذف — ستُضاف الجديدة فقط.\n\nهل تريد المتابعة؟')) return;
+    setSaveStatus('⏳ جارٍ تحميل القائمة...');
+    try {
+      for (const item of DEMO_SEED_ITEMS) {
+        const id = 'seed_' + Date.now() + '_' + item.id;
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id), {
+          name: item.name, desc: item.desc, price: item.price,
+          ...(item.salePrice ? { salePrice: item.salePrice } : {}),
+          category: item.category, image: item.image,
+          id, createdAt: new Date().toISOString(),
+        });
+      }
+      const merged = [...new Set([...categories, ...DEMO_SEED_CATEGORIES])];
+      await setDoc(getSettingsDoc(), { categories: merged }, { merge: true });
+      setCategories(merged);
+      setSaveStatus('✅ تم تحميل ' + DEMO_SEED_ITEMS.length + ' وجبة بنجاح!');
+      setTimeout(() => setSaveStatus(''), 4000);
+    } catch (e) {
+      setSaveStatus('❌ خطأ في التحميل');
+      console.error(e);
+    }
+  };
+
   const addToCart = (item) => setCart(p => ({ ...p, [item.id]: (p[item.id] || 0) + 1 }));
   const removeFromCart = (id) => setCart(p => {
     const n = { ...p };
@@ -2081,8 +2107,29 @@ export default function App() {
             <section className="bg-slate-900 rounded-[2.5rem] p-8 border border-white/10 shadow-xl">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em]">قائمة الوجبات الحالية</h3>
-                <span className="bg-white/10 px-3 py-1 rounded-full text-white text-[10px] font-black">{menuItems.length} صنف</span>
+                <div className="flex items-center gap-2">
+                  <span className="bg-white/10 px-3 py-1 rounded-full text-white text-[10px] font-black">{menuItems.length} صنف</span>
+                  <button onClick={handleSeedRealMenu}
+                    className="px-3 py-1.5 rounded-xl text-[10px] font-black transition-all active:scale-95 text-white/70 hover:text-white border border-white/10 hover:border-white/25 hover:bg-white/5"
+                    title="تحميل قائمة نموذجية بصور عالية الجودة">
+                    🌱 تحميل نموذجي
+                  </button>
+                </div>
               </div>
+
+              {/* Empty state */}
+              {menuItems.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-14 gap-4 text-center">
+                  <div className="text-5xl">🍽️</div>
+                  <p className="text-white/40 font-black text-sm">المنيو فارغ</p>
+                  <p className="text-white/25 text-[11px] font-bold">أضف وجبات يدوياً أو اضغط زر التحميل النموذجي</p>
+                  <button onClick={handleSeedRealMenu}
+                    className="mt-2 px-6 py-3 rounded-2xl text-white font-black text-sm active:scale-95 transition-all shadow-lg"
+                    style={{ backgroundColor: settings.primaryColor }}>
+                    🌱 تحميل قائمة نموذجية جاهزة
+                  </button>
+                </div>
+              )}
 
               {/* Category filter pills */}
               <div className="flex flex-wrap gap-2 mb-5">
@@ -2400,14 +2447,14 @@ export default function App() {
 
                       {/* add / counter */}
                       {cart[item.id] ? (
-                        <div className="flex items-center bg-slate-100 rounded-xl p-0.5 shrink-0">
-                          <button type="button" onClick={() => removeFromCart(item.id)} className="w-6 h-6 sm:w-7 sm:h-7 font-black hover:bg-white rounded-lg leading-none text-slate-700 text-sm">－</button>
+                        <div className="flex items-center bg-slate-100 rounded-xl p-0.5 shrink-0 touch-action-manipulation" style={{ touchAction:'manipulation' }}>
+                          <button type="button" onClick={() => removeFromCart(item.id)} className="menu-add-btn w-6 h-6 sm:w-7 sm:h-7 font-black hover:bg-white rounded-lg leading-none text-slate-700 text-sm">－</button>
                           <span className="w-5 text-center font-black text-xs text-slate-900">{cart[item.id]}</span>
-                          <button type="button" onClick={() => addToCart(item)} className="w-6 h-6 sm:w-7 sm:h-7 font-black hover:bg-white rounded-lg leading-none text-slate-700 text-sm">＋</button>
+                          <button type="button" onClick={() => addToCart(item)} className="menu-add-btn w-6 h-6 sm:w-7 sm:h-7 font-black hover:bg-white rounded-lg leading-none text-slate-700 text-sm">＋</button>
                         </div>
                       ) : (
                         <button type="button" onClick={() => addToCart(item)}
-                          className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl font-black text-white text-base flex items-center justify-center shrink-0 active:scale-90 transition-transform shadow-md"
+                          className="menu-add-btn w-7 h-7 sm:w-8 sm:h-8 rounded-xl font-black text-white text-base flex items-center justify-center shrink-0 shadow-md"
                           style={{ backgroundColor: settings.primaryColor }}>
                           +
                         </button>
@@ -2711,7 +2758,7 @@ export default function App() {
         .demo-float-btn { animation: demoBobble 2.8s ease-in-out infinite; }
         .demo-ring-pulse { animation: demoRingPulse 2.2s ease-out infinite; }
 
-        /* ── MENU CARDS — glass + hover dance ── */
+        /* ── MENU CARDS — glass + hover dance + mobile touch ── */
         .menu-card {
           background: rgba(255, 255, 255, 0.70);
           backdrop-filter: blur(14px);
@@ -2720,14 +2767,37 @@ export default function App() {
           box-shadow: 0 2px 10px rgba(0,0,0,0.055), 0 1px 3px rgba(0,0,0,0.04);
           transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
           will-change: transform;
+          cursor: pointer;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
         }
-        .menu-card:hover {
-          transform: translateY(-8px) rotate(-0.5deg);
-          box-shadow: 0 24px 56px rgba(0,0,0,0.11), 0 8px 20px color-mix(in srgb, var(--brand) 28%, transparent), 0 1px 0 rgba(255,255,255,0.9) inset;
+        /* Desktop hover */
+        @media (hover: hover) {
+          .menu-card:hover {
+            transform: translateY(-8px) rotate(-0.5deg);
+            box-shadow: 0 24px 56px rgba(0,0,0,0.11), 0 8px 20px color-mix(in srgb, var(--brand) 28%, transparent), 0 1px 0 rgba(255,255,255,0.9) inset;
+          }
+          .menu-card:active {
+            transform: translateY(-2px) rotate(0.4deg);
+            transition: transform 0.1s ease;
+          }
         }
-        .menu-card:active {
-          transform: translateY(-2px) rotate(0.4deg);
-          transition: transform 0.1s ease;
+        /* Mobile touch — no hover, use active instead */
+        @media (hover: none) {
+          .menu-card:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: transform 0.08s ease, box-shadow 0.08s ease;
+          }
+        }
+        /* Add button touch */
+        .menu-add-btn {
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
+          transition: transform 0.1s ease, box-shadow 0.1s ease;
+        }
+        .menu-add-btn:active {
+          transform: scale(0.82) !important;
         }
 
         .no-scrollbar::-webkit-scrollbar { display: none; }
