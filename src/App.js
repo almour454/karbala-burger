@@ -794,7 +794,7 @@ export default function App() {
       {/* ── TOP TICKER ── */}
       {view === "customer" && settingsLoaded && (
         <div style={{ background: settings.primaryColor, overflow: 'hidden', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-          <div style={{ display: 'flex', animation: 'tickerScroll 18s linear infinite', whiteSpace: 'nowrap', padding: '9px 0' }}>
+          <div style={{ display: 'flex', animation: 'tickerScroll 9s linear infinite', whiteSpace: 'nowrap', padding: '9px 0' }}>
             {[...Array(4)].map((_, ri) => (
               <span key={ri} style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
                 {[
@@ -1864,86 +1864,129 @@ export default function App() {
           {settingsLoaded && (
           <div>
           {/* CUSTOMER HEADER */}
-          <header className="pt-10 pb-8 px-6 text-center animate-fade-in">
+          <header className="pt-10 pb-8 px-6 text-center relative overflow-hidden">
 
-             {/* ── LOGO ── */}
-             {settings.logoUrl ? (
-               <div className="flex justify-center mb-6">
-                 <div className="relative">
-                   <div className="w-32 h-32 overflow-hidden"
-                     style={{ filter: `drop-shadow(0 20px 40px ${settings.primaryColor}50)` }}>
-                     <img src={settings.logoUrl} alt={settings.restaurantName}
-                       className="w-full h-full object-contain"
-                       onError={e => e.target.style.display='none'} />
-                   </div>
-                 </div>
-               </div>
-             ) : (
-               <div className="flex justify-center mb-6">
-                 <div className="relative w-28 h-28 rounded-[2rem] flex items-center justify-center"
-                   style={{
-                     background: `linear-gradient(135deg, ${settings.primaryColor} 0%, #7c2d12 100%)`,
-                     boxShadow: `0 20px 60px ${settings.primaryColor}50`
-                   }}>
-                   <span className="text-5xl select-none">🍔</span>
-                 </div>
-               </div>
-             )}
+            {/* ── A: BREATHING BACKGROUND GLOW ── */}
+            <div className="hero-breath-bg pointer-events-none absolute inset-0"
+              style={{ background: `radial-gradient(ellipse 75% 60% at 50% 30%, ${settings.primaryColor}22 0%, transparent 70%)` }} />
 
-             <h1 className="text-6xl font-black italic uppercase tracking-tighter leading-tight text-slate-950">{settings.restaurantName}</h1>
-             <h2 className="text-4xl font-black text-slate-800/40 mt-1">{settings.restaurantNameAr}</h2>
-             <div className="mt-8 flex flex-col items-center gap-3">
-                <div className="flex items-center gap-3 bg-black text-white px-6 py-2.5 rounded-full shadow-2xl">
-                   <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-                   <span className="text-[11px] font-black uppercase tracking-widest">{settings.openingHours}</span>
-                </div>
-                <div className="text-[12px] font-black text-slate-900/40 uppercase tracking-tighter" dir="rtl">📍 {settings.locationDesc}</div>
-                {(() => {
-                  const phones = contactPhonesList(settings);
-                  const hasSocial = settings.facebookUrl || settings.instagramUrl || settings.tiktokUrl;
-                  if (!hasSocial && phones.length === 0) return null;
-                  return (
-                    <div className="mt-2 flex flex-wrap items-center justify-center gap-2 max-w-sm mx-auto px-2">
-                      {settings.facebookUrl && (
-                        <a href={settings.facebookUrl} target="_blank" rel="noreferrer" aria-label="Facebook" title="Facebook" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#1877F2] hover:border-[#1877F2]/30 hover:shadow-md transition-all flex items-center justify-center shrink-0">
-                          <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 fill-current">
-                            <path d="M13.5 8.5V6.8c0-.8.5-1.1 1.2-1.1H16V3h-2.1C11.6 3 10.5 4.4 10.5 6.2v2.3H9v2.8h1.5V21h3V11.3h2.1l.3-2.8h-2.4z" />
-                          </svg>
-                        </a>
-                      )}
-                      {settings.instagramUrl && (
-                        <a href={settings.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram" title="Instagram" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#E1306C] hover:border-[#E1306C]/30 hover:shadow-md transition-all flex items-center justify-center shrink-0">
-                          <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 stroke-current fill-none" strokeWidth="2">
-                            <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
-                            <circle cx="12" cy="12" r="4" />
-                            <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
-                          </svg>
-                        </a>
-                      )}
-                      {settings.tiktokUrl && (
-                        <a href={settings.tiktokUrl} target="_blank" rel="noreferrer" aria-label="TikTok" title="TikTok" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#00F2EA] hover:border-[#00F2EA]/30 hover:shadow-md transition-all flex items-center justify-center shrink-0">
-                          <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 fill-current">
-                            <path d="M14.8 3h2.6c.2 1.5 1.3 2.8 2.6 3.3v2.7c-1.3 0-2.6-.4-3.7-1.1v6.3c0 3-2.4 5.4-5.4 5.4a5.4 5.4 0 1 1 0-10.8c.3 0 .6 0 .9.1v2.7a2.8 2.8 0 1 0 1.9 2.7V3z" />
-                          </svg>
-                        </a>
-                      )}
-                      {phones.map((num, idx) => (
-                        <a
-                          key={`contact-phone-${idx}`}
-                          href={toTelHref(num)}
-                          dir="ltr"
-                          className="inline-flex items-center gap-1.5 h-10 px-3 rounded-full bg-white border border-black/10 text-slate-700 hover:border-slate-300 hover:shadow-md transition-all shrink-0"
-                        >
-                          <svg aria-hidden="true" viewBox="0 0 24 24" className="w-3 h-3 shrink-0 opacity-60" fill="none" stroke="currentColor" strokeWidth="2.2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                          </svg>
-                          <span className="text-[11px] font-black tabular-nums tracking-tight text-slate-800">{digitsOnly(num) || num}</span>
-                        </a>
-                      ))}
+            {/* ── E: FLOATING PARTICLES ── */}
+            {[
+              { size: 5, left: '12%',  delay: '0s',    dur: '6s'  },
+              { size: 3, left: '28%',  delay: '1.2s',  dur: '8s'  },
+              { size: 4, left: '50%',  delay: '0.4s',  dur: '7s'  },
+              { size: 3, left: '65%',  delay: '2s',    dur: '9s'  },
+              { size: 5, left: '80%',  delay: '0.8s',  dur: '6.5s'},
+              { size: 3, left: '92%',  delay: '1.6s',  dur: '7.5s'},
+            ].map((p, i) => (
+              <span key={i} className="hero-particle pointer-events-none absolute bottom-0 rounded-full"
+                style={{
+                  width: p.size, height: p.size,
+                  left: p.left,
+                  backgroundColor: `${settings.primaryColor}55`,
+                  animationDelay: p.delay,
+                  animationDuration: p.dur,
+                }} />
+            ))}
+
+            {/* ── D: STAGGERED ENTRANCE — LOGO ── */}
+            <div className="hero-enter-0">
+              {/* ── B: FLOATING LOGO ── */}
+              {settings.logoUrl ? (
+                <div className="flex justify-center mb-6">
+                  <div className="relative logo-float">
+                    {/* glow ring */}
+                    <div className="absolute inset-0 rounded-full logo-ring-pulse"
+                      style={{ boxShadow: `0 0 0 8px ${settings.primaryColor}22, 0 0 0 16px ${settings.primaryColor}0d` }} />
+                    <div className="w-32 h-32 overflow-hidden relative z-10"
+                      style={{ filter: `drop-shadow(0 20px 40px ${settings.primaryColor}55)` }}>
+                      <img src={settings.logoUrl} alt={settings.restaurantName}
+                        className="w-full h-full object-contain"
+                        onError={e => e.target.style.display='none'} />
                     </div>
-                  );
-                })()}
-             </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex justify-center mb-6">
+                  <div className="relative logo-float">
+                    <div className="absolute inset-0 rounded-[2rem] logo-ring-pulse"
+                      style={{ boxShadow: `0 0 0 8px ${settings.primaryColor}22, 0 0 0 16px ${settings.primaryColor}0d` }} />
+                    <div className="relative z-10 w-28 h-28 rounded-[2rem] flex items-center justify-center"
+                      style={{
+                        background: `linear-gradient(135deg, ${settings.primaryColor} 0%, #7c2d12 100%)`,
+                        boxShadow: `0 20px 60px ${settings.primaryColor}50`
+                      }}>
+                      <span className="text-5xl select-none">🍔</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── D: STAGGERED ENTRANCE — TITLE ── */}
+            <div className="hero-enter-1">
+              {/* ── C: SHIMMER TITLE ── */}
+              <h1 className="hero-title-shimmer text-5xl sm:text-6xl font-black italic uppercase tracking-tighter leading-tight text-slate-950 relative inline-block overflow-hidden">
+                {settings.restaurantName}
+              </h1>
+              <h2 className="text-3xl sm:text-4xl font-black text-slate-800/40 mt-1">{settings.restaurantNameAr}</h2>
+            </div>
+
+            {/* ── D: STAGGERED ENTRANCE — BADGE + LOCATION ── */}
+            <div className="mt-8 flex flex-col items-center gap-3 hero-enter-2">
+              <div className="flex items-center gap-3 bg-black text-white px-6 py-2.5 rounded-full shadow-2xl">
+                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                <span className="text-[11px] font-black uppercase tracking-widest">{settings.openingHours}</span>
+              </div>
+              <div className="text-[12px] font-black text-slate-900/40 uppercase tracking-tighter" dir="rtl">📍 {settings.locationDesc}</div>
+
+              {/* ── D: STAGGERED ENTRANCE — SOCIALS ── */}
+              {(() => {
+                const phones = contactPhonesList(settings);
+                const hasSocial = settings.facebookUrl || settings.instagramUrl || settings.tiktokUrl;
+                if (!hasSocial && phones.length === 0) return null;
+                return (
+                  <div className="mt-2 flex flex-wrap items-center justify-center gap-2 max-w-sm mx-auto px-2 hero-enter-3">
+                    {settings.facebookUrl && (
+                      <a href={settings.facebookUrl} target="_blank" rel="noreferrer" aria-label="Facebook" title="Facebook" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#1877F2] hover:border-[#1877F2]/30 hover:shadow-md transition-all flex items-center justify-center shrink-0">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                          <path d="M13.5 8.5V6.8c0-.8.5-1.1 1.2-1.1H16V3h-2.1C11.6 3 10.5 4.4 10.5 6.2v2.3H9v2.8h1.5V21h3V11.3h2.1l.3-2.8h-2.4z" />
+                        </svg>
+                      </a>
+                    )}
+                    {settings.instagramUrl && (
+                      <a href={settings.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram" title="Instagram" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#E1306C] hover:border-[#E1306C]/30 hover:shadow-md transition-all flex items-center justify-center shrink-0">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 stroke-current fill-none" strokeWidth="2">
+                          <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
+                          <circle cx="12" cy="12" r="4" />
+                          <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+                        </svg>
+                      </a>
+                    )}
+                    {settings.tiktokUrl && (
+                      <a href={settings.tiktokUrl} target="_blank" rel="noreferrer" aria-label="TikTok" title="TikTok" className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-[#00F2EA] hover:border-[#00F2EA]/30 hover:shadow-md transition-all flex items-center justify-center shrink-0">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                          <path d="M14.8 3h2.6c.2 1.5 1.3 2.8 2.6 3.3v2.7c-1.3 0-2.6-.4-3.7-1.1v6.3c0 3-2.4 5.4-5.4 5.4a5.4 5.4 0 1 1 0-10.8c.3 0 .6 0 .9.1v2.7a2.8 2.8 0 1 0 1.9 2.7V3z" />
+                        </svg>
+                      </a>
+                    )}
+                    {phones.map((num, idx) => (
+                      <a
+                        key={`contact-phone-${idx}`}
+                        href={toTelHref(num)}
+                        dir="ltr"
+                        className="inline-flex items-center gap-1.5 h-10 px-3 rounded-full bg-white border border-black/10 text-slate-700 hover:border-slate-300 hover:shadow-md transition-all shrink-0"
+                      >
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-3 h-3 shrink-0 opacity-60" fill="none" stroke="currentColor" strokeWidth="2.2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                        <span className="text-[11px] font-black tabular-nums tracking-tight text-slate-800">{digitsOnly(num) || num}</span>
+                      </a>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
           </header>
 
           {/* DEALS */}
@@ -2289,6 +2332,63 @@ export default function App() {
         .owner-panel h3[class*="text-orange"] { color: #ea580c !important; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.8s ease-out forwards; }
+
+        /* ── A: HERO BREATHING BACKGROUND ── */
+        @keyframes heroBreathe {
+          0%, 100% { opacity: 0.55; transform: scale(1); }
+          50%       { opacity: 1;    transform: scale(1.06); }
+        }
+        .hero-breath-bg { animation: heroBreathe 5s ease-in-out infinite; }
+
+        /* ── B: LOGO FLOAT ── */
+        @keyframes logoFloat {
+          0%, 100% { transform: translateY(0px); }
+          50%       { transform: translateY(-8px); }
+        }
+        .logo-float { animation: logoFloat 4s ease-in-out infinite; }
+
+        /* ── B: LOGO RING PULSE ── */
+        @keyframes logoRingPulse {
+          0%, 100% { opacity: 0.6; transform: scale(1); }
+          50%       { opacity: 1;   transform: scale(1.12); }
+        }
+        .logo-ring-pulse { animation: logoRingPulse 3s ease-in-out infinite; border-radius: inherit; }
+
+        /* ── C: TITLE SHIMMER ── */
+        @keyframes titleShimmerMove {
+          0%   { transform: translateX(-130%) skewX(-20deg); opacity: 0; }
+          10%  { opacity: 1; }
+          90%  { opacity: 1; }
+          100% { transform: translateX(230%) skewX(-20deg); opacity: 0; }
+        }
+        .hero-title-shimmer::after {
+          content: '';
+          position: absolute;
+          top: -10%; left: 0;
+          width: 35%; height: 120%;
+          background: linear-gradient(105deg, transparent, rgba(255,255,255,0.45), transparent);
+          animation: titleShimmerMove 4s ease-in-out infinite;
+          animation-delay: 1.5s;
+        }
+
+        /* ── D: STAGGERED ENTRANCE ── */
+        @keyframes heroEnterUp {
+          from { opacity: 0; transform: translateY(22px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .hero-enter-0 { animation: heroEnterUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.0s both; }
+        .hero-enter-1 { animation: heroEnterUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.15s both; }
+        .hero-enter-2 { animation: heroEnterUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.3s both; }
+        .hero-enter-3 { animation: heroEnterUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.45s both; }
+
+        /* ── E: FLOATING PARTICLES ── */
+        @keyframes particleDrift {
+          0%   { transform: translateY(0) translateX(0) scale(1); opacity: 0; }
+          15%  { opacity: 1; }
+          85%  { opacity: 0.6; }
+          100% { transform: translateY(-90px) translateX(10px) scale(0.6); opacity: 0; }
+        }
+        .hero-particle { animation: particleDrift linear infinite; position: absolute; }
         @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-25%); } }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
