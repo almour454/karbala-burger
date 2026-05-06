@@ -71,8 +71,30 @@ const getMenuCollection = () => collection(db, 'artifacts', appId, 'public', 'da
 const getSettingsDoc = () => doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
 const getOwnerDoc = () => doc(db, 'artifacts', appId, 'private', 'data', 'admin', 'owner');
 const getOrdersCollection = (dateStr) => collection(db, 'artifacts', appId, 'private', 'data', 'orders', dateStr, 'items');
-// Counter lives in public so anonymous customers can read+write it during the transaction
 const getOrderCounterDoc = (dateStr) => doc(db, 'artifacts', appId, 'public', 'data', 'counters', dateStr);
+
+// ── DEMO MODE SEED DATA ──
+const DEMO_SEED_SETTINGS = {
+  restaurantName: "مطعمك هنا",  restaurantNameAr: "YOUR RESTAURANT",
+  primaryColor: "#ea580c", bgColor: "#fdf8f4",
+  whatsapp: "9647800000000", openingHours: "من ال 9 صباحاً الى ال 11 مساءً",
+  locationDesc: "مدينتك — شارعك", facebookUrl: "", instagramUrl: "", tiktokUrl: "",
+  dealsSectionTitle: "عروض نارية 🔥", checkoutNote: "يرجى التأكد من الاسم ورقم الهاتف قبل إرسال الطلب.",
+  cartDeliveryNote: "رسوم التوصيل حسب المنطقة.", deliveryFee: 2000, orderMode: "both",
+  contactPhone1: "9647800000000", contactPhone2: "", contactPhone3: "",
+  autoGreyHours: 5, printCopies: 2, dayCloseHour: 0, logoUrl: "",
+};
+const DEMO_SEED_CATEGORIES = ["برجر", "مقبلات", "مشروبات"];
+const DEMO_SEED_ITEMS = [
+  { id:'di1', name:"برجر كلاسيك",       desc:"لحم بقري طازج مع خس وطماطم وجبن أمريكي",       price:12000, category:"برجر",     image:"https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80" },
+  { id:'di2', name:"برجر دبل تشيز",     desc:"قطعتان لحم مع جبن مزدوج وصوص خاص",              price:18000, salePrice:15000, category:"برجر",     image:"https://images.unsplash.com/photo-1553979459-d2229ba7433b?w=400&q=80" },
+  { id:'di3', name:"برجر دجاج مقرمش",   desc:"دجاج بانكو مقرمش مع مايونيز حار",                price:11000, category:"برجر",     image:"https://images.unsplash.com/photo-1606755962773-d324e0a13086?w=400&q=80" },
+  { id:'di4', name:"بطاطا مقلية",       desc:"بطاطا ذهبية مقرمشة مع كاتشاب",                  price:4000,  category:"مقبلات",   image:"https://images.unsplash.com/photo-1576107232684-1279f390859f?w=400&q=80" },
+  { id:'di5', name:"حلقات بصل",         desc:"حلقات بصل مقرمشة مع صوص البارميزان",              price:5000, salePrice:4000, category:"مقبلات",   image:"https://images.unsplash.com/photo-1639024471283-03518883512d?w=400&q=80" },
+  { id:'di6', name:"كولا",              desc:"مشروب غازي بارد 330 مل",                         price:2000,  category:"مشروبات",  image:"https://images.unsplash.com/photo-1629203851122-3726ecdf080e?w=400&q=80" },
+  { id:'di7', name:"عصير برتقال طازج",  desc:"عصير برتقال طبيعي 100٪",                         price:3500,  category:"مشروبات",  image:"https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=400&q=80" },
+  { id:'di8', name:"شيك شوكولا",        desc:"شيك كريمي بالشوكولا الداكنة",                    price:5000,  category:"مشروبات",  image:"https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=400&q=80" },
+];
 // getDateStr: returns the "business day" date string.
 // If current hour is before closeHour (e.g. 12:30am and closeHour=1),
 // it means we're still in the previous business day — return yesterday.
@@ -134,6 +156,11 @@ export default function App() {
   // Particle system refs
   const heroParticleRef = useRef(null);
   const particleRafRef  = useRef(null);
+
+  // Demo mode — ref lets Firebase callbacks check without stale closure
+  const isDemoModeRef = useRef(false);
+  const [isDemoMode,   setIsDemoMode]   = useState(false);
+  const [demoNewItem,  setDemoNewItem]  = useState({ name:'', desc:'', price:'', salePrice:'', category:'برجر', image:'' });
   
   const [menuItems, setMenuItems] = useState([]);
   const [categories, setCategories] = useState(["برجر", "مقبلات", "مشروبات"]);
@@ -256,6 +283,7 @@ export default function App() {
     const unsubMenu = onSnapshot(
       getMenuCollection(),
       (snap) => {
+        if (isDemoModeRef.current) return;
         setDataError(null);
         const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setMenuItems(data);
@@ -269,6 +297,7 @@ export default function App() {
     const unsubSettings = onSnapshot(
       getSettingsDoc(),
       (snap) => {
+        if (isDemoModeRef.current) return;
         if (snap.exists()) {
           const data = snap.data();
           if (Array.isArray(data.categories)) setCategories(data.categories);
@@ -539,29 +568,32 @@ export default function App() {
 
   const updateGlobalSettings = async (field, value) => {
     if (!user) return;
+    if (isDemoMode) { setSettings(prev => ({ ...prev, [field]: value })); return; }
     await setDoc(getSettingsDoc(), { [field]: value }, { merge: true });
   };
 
   const handleAddItem = async () => {
-    if (!user || !newItem.name || !newItem.price) return;
-    const id = newItem.id || "item_" + Date.now();
+    const src = isDemoMode ? demoNewItem : newItem;
+    if (!src.name || !src.price) return;
+    const id = src.id || (isDemoMode ? 'di_' : 'item_') + Date.now();
+    const item = { ...src, id, price: Number(src.price)||0, salePrice: src.salePrice ? Number(src.salePrice) : null, createdAt: new Date().toISOString() };
+    if (isDemoMode) {
+      setMenuItems(prev => { const ex = prev.findIndex(i => i.id === id); return ex >= 0 ? prev.map(i => i.id===id ? item : i) : [...prev, item]; });
+      setDemoNewItem({ name:'', desc:'', price:'', salePrice:'', category: src.category, image:'' });
+      setSaveStatus("تم الحفظ ✅"); setTimeout(() => setSaveStatus(""), 2500);
+      return;
+    }
+    if (!user) return;
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id), {
-        ...newItem,
-        id,
-        price: Number(newItem.price) || 0,
-        salePrice: newItem.salePrice ? Number(newItem.salePrice) : null,
-        createdAt: new Date().toISOString()
-      });
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id), item);
       setNewItem({ name: "", price: "", salePrice: "", desc: "", image: "", category: newItem.category });
       setSaveStatus("تم الحفظ بنجاح! ✅");
       setTimeout(() => setSaveStatus(""), 3000);
-    } catch (e) {
-      setSaveStatus("خطأ في الحفظ ❌");
-    }
+    } catch (e) { setSaveStatus("خطأ في الحفظ ❌"); }
   };
 
   const handleDeleteItem = async (id) => {
+    if (isDemoMode) { setMenuItems(prev => prev.filter(i => i.id !== id)); return; }
     if (!user) return;
     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id));
   };
@@ -572,18 +604,41 @@ export default function App() {
     const updated = [...categories, trimmed];
     setCategories(updated);
     setNewCategoryInput("");
+    if (isDemoMode) return;
     await setDoc(getSettingsDoc(), { categories: updated }, { merge: true });
   };
 
   const handleRemoveCategory = async (cat) => {
     const updated = categories.filter(c => c !== cat);
     setCategories(updated);
+    if (isDemoMode) return;
     await setDoc(getSettingsDoc(), { categories: updated }, { merge: true });
   };
 
   const handleToggleVisibility = async (item) => {
     const hidden = !item.hidden;
+    if (isDemoMode) { setMenuItems(prev => prev.map(i => i.id===item.id ? {...i, hidden} : i)); return; }
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', item.id), { hidden }, { merge: true });
+  };
+
+  // ── DEMO LOGIN ──
+  const handleDemoLogin = () => {
+    isDemoModeRef.current = true;
+    setIsDemoMode(true);
+    setSettings({ ...DEMO_SEED_SETTINGS });
+    setMenuItems([...DEMO_SEED_ITEMS]);
+    setCategories([...DEMO_SEED_CATEGORIES]);
+    setSettingsLoaded(true);
+    setIsUnlocked(true);
+    setAdminTab('menu');
+    navigateTo('owner');
+  };
+
+  const handleExitDemo = () => {
+    isDemoModeRef.current = false;
+    setIsDemoMode(false);
+    setIsUnlocked(false);
+    navigateTo('customer');
   };
 
   const addToCart = (item) => setCart(p => ({ ...p, [item.id]: (p[item.id] || 0) + 1 }));
@@ -918,12 +973,156 @@ export default function App() {
               <input type="password" value={ownerPassword} onChange={e => setOwnerPassword(e.target.value)} className={`w-full bg-black border ${authError ? 'border-red-500 animate-shake' : 'border-white/10'} p-4 rounded-2xl text-white text-right outline-none focus:border-orange-500 text-sm font-bold`} placeholder="كلمة المرور" />
               {authError && <p className="mt-3 text-red-400 text-xs font-bold">{authError}</p>}
               <button type="submit" className="w-full mt-6 py-5 text-white font-black rounded-2xl text-[12px] uppercase tracking-widest shadow-xl transition-transform active:scale-95" style={{ backgroundColor: settings.primaryColor }}>دخول</button>
+              {/* Demo separator */}
+              <div className="flex items-center gap-3 my-5">
+                <div className="flex-1 h-px bg-white/10" />
+                <span className="text-white/25 text-[10px] font-black uppercase tracking-widest">أو</span>
+                <div className="flex-1 h-px bg-white/10" />
+              </div>
+              <button type="button" onClick={handleDemoLogin}
+                className="w-full py-4 rounded-2xl text-[12px] font-black tracking-wide transition-all active:scale-95 border border-white/15 text-white/70 hover:text-white hover:border-white/30 hover:bg-white/5">
+                ✨ جرّب النظام مجاناً — وضع العرض
+              </button>
+              <p className="text-white/20 text-[9px] font-bold mt-2">بيانات تجريبية — لا يؤثر على أي بيانات حقيقية</p>
             </form>
           </div>
         ) : (
           <div className="owner-panel max-w-4xl mx-auto p-6 pb-40 space-y-6" dir="rtl">
 
-            {/* TOP BAR — tabs + logout */}
+            {/* ── DEMO MODE PANEL ── */}
+            {isDemoMode ? (
+            <div className="space-y-6">
+
+              {/* Demo banner */}
+              <div className="rounded-[2rem] p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                style={{ background: `linear-gradient(135deg, ${settings.primaryColor}22, ${settings.primaryColor}08)`, border: `1.5px solid ${settings.primaryColor}40` }}>
+                <div>
+                  <p className="font-black text-base" style={{ color: settings.primaryColor }}>🎮 وضع العرض التجريبي</p>
+                  <p className="text-slate-500 text-[11px] font-bold mt-0.5">التغييرات محلية فقط — لا تُحفظ في قاعدة البيانات</p>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <button onClick={() => { setSettings({...DEMO_SEED_SETTINGS}); setMenuItems([...DEMO_SEED_ITEMS]); setCategories([...DEMO_SEED_CATEGORIES]); }}
+                    className="px-4 py-2 rounded-xl text-[11px] font-black bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 active:scale-95 transition-all">
+                    🔄 إعادة تعيين
+                  </button>
+                  <button onClick={handleExitDemo}
+                    className="px-4 py-2 rounded-xl text-[11px] font-black text-white active:scale-95 transition-all"
+                    style={{ backgroundColor: settings.primaryColor }}>
+                    ← عرض المنيو
+                  </button>
+                </div>
+              </div>
+
+              {/* BRANDING — the wow section */}
+              <section className="bg-slate-900 rounded-[2.5rem] p-8 border border-white/10 shadow-xl space-y-5">
+                <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em]">🎨 هوية المطعم — غيّر وشاهد النتيجة فوراً</h3>
+
+                {/* Color + name side by side */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-black/40 border border-white/5 p-4 rounded-xl space-y-2">
+                    <p className="text-white/50 text-[10px] font-black uppercase tracking-widest">اللون الرئيسي</p>
+                    <div className="flex items-center gap-3">
+                      <input type="color" className="w-12 h-12 rounded-xl border-0 cursor-pointer bg-transparent"
+                        value={settings.primaryColor}
+                        onChange={e => updateGlobalSettings('primaryColor', e.target.value)} />
+                      <div>
+                        <p className="text-white font-black text-sm">{settings.primaryColor}</p>
+                        <p className="text-white/30 text-[9px] font-bold">يتغير المنيو مباشرةً</p>
+                      </div>
+                    </div>
+                    {/* Quick color presets */}
+                    <div className="flex gap-2 flex-wrap pt-1">
+                      {['#ea580c','#dc2626','#16a34a','#2563eb','#7c3aed','#db2777','#0891b2','#ca8a04'].map(c => (
+                        <button key={c} onClick={() => updateGlobalSettings('primaryColor', c)}
+                          className="w-7 h-7 rounded-lg border-2 transition-transform hover:scale-110 active:scale-95"
+                          style={{ backgroundColor: c, borderColor: settings.primaryColor === c ? 'white' : 'transparent' }} />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="bg-black/40 border border-white/5 p-4 rounded-xl space-y-3">
+                    <p className="text-white/50 text-[10px] font-black uppercase tracking-widest">اسم المطعم</p>
+                    <input className="w-full bg-black/50 border border-white/10 p-3 rounded-xl text-white text-sm font-bold outline-none focus:border-orange-500"
+                      placeholder="اسم المطعم EN"
+                      value={settings.restaurantName}
+                      onChange={e => updateGlobalSettings('restaurantName', e.target.value)} />
+                    <input className="w-full bg-black/50 border border-white/10 p-3 rounded-xl text-white text-sm font-bold outline-none focus:border-orange-500"
+                      placeholder="اسم المطعم بالعربي"
+                      value={settings.restaurantNameAr}
+                      onChange={e => updateGlobalSettings('restaurantNameAr', e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm"
+                    placeholder="ساعات العمل" value={settings.openingHours}
+                    onChange={e => updateGlobalSettings('openingHours', e.target.value)} />
+                  <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm"
+                    placeholder="الموقع / العنوان" value={settings.locationDesc}
+                    onChange={e => updateGlobalSettings('locationDesc', e.target.value)} />
+                  <input className="bg-black/40 border border-white/5 p-4 rounded-xl text-white text-sm sm:col-span-2"
+                    placeholder="رابط اللوغو (URL)" value={settings.logoUrl || ''}
+                    onChange={e => updateGlobalSettings('logoUrl', e.target.value)} />
+                </div>
+              </section>
+
+              {/* MENU MANAGEMENT */}
+              <section className="bg-slate-900 rounded-[2.5rem] p-8 border border-white/10 shadow-xl space-y-5">
+                <h3 className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em]">🍔 إدارة الوجبات</h3>
+
+                {/* Quick add form */}
+                <div className="bg-black/40 rounded-2xl p-5 border border-white/5 space-y-3">
+                  <p className="text-white/60 text-[10px] font-black uppercase tracking-widest">إضافة وجبة جديدة</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input className="col-span-2 bg-black/50 border border-white/10 p-3 rounded-xl text-white text-sm font-bold outline-none focus:border-orange-500"
+                      placeholder="اسم الوجبة *" value={demoNewItem.name}
+                      onChange={e => setDemoNewItem(p=>({...p, name:e.target.value}))} />
+                    <input className="bg-black/50 border border-white/10 p-3 rounded-xl text-white text-sm outline-none focus:border-orange-500"
+                      placeholder="السعر د.ع *" type="number" value={demoNewItem.price}
+                      onChange={e => setDemoNewItem(p=>({...p, price:e.target.value}))} />
+                    <input className="bg-black/50 border border-white/10 p-3 rounded-xl text-orange-400 text-sm outline-none focus:border-orange-500"
+                      placeholder="سعر الخصم" type="number" value={demoNewItem.salePrice}
+                      onChange={e => setDemoNewItem(p=>({...p, salePrice:e.target.value}))} />
+                    <select className="col-span-2 bg-black/50 border border-white/10 p-3 rounded-xl text-white text-sm outline-none"
+                      value={demoNewItem.category}
+                      onChange={e => setDemoNewItem(p=>({...p, category:e.target.value}))}>
+                      {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <input className="col-span-2 bg-black/50 border border-white/10 p-3 rounded-xl text-white text-sm outline-none focus:border-orange-500"
+                      placeholder="رابط صورة الوجبة (URL)" value={demoNewItem.image}
+                      onChange={e => setDemoNewItem(p=>({...p, image:e.target.value}))} />
+                  </div>
+                  <button onClick={handleAddItem}
+                    className="w-full py-4 rounded-2xl text-white font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
+                    style={{ backgroundColor: settings.primaryColor }}>
+                    إضافة للمنيو +
+                  </button>
+                  {saveStatus && <p className="text-center text-xs font-bold text-green-400">{saveStatus}</p>}
+                </div>
+
+                {/* Items list */}
+                <div className="space-y-2">
+                  {menuItems.map(item => (
+                    <div key={item.id} className={`flex items-center gap-3 bg-black/40 rounded-2xl p-3 border border-white/5 ${item.hidden ? 'opacity-40' : ''}`}>
+                      {item.image && <img src={item.image} alt="" className="w-12 h-12 rounded-xl object-cover bg-slate-800 shrink-0" onError={e=>e.target.style.display='none'} />}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-black text-sm truncate">{item.name}</p>
+                        <p className="text-white/40 text-[10px] font-bold">{(item.salePrice || item.price || 0).toLocaleString()} د.ع — {item.category}</p>
+                      </div>
+                      <button onClick={() => handleToggleVisibility(item)}
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black shrink-0 transition-all ${item.hidden ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/10 text-green-400'}`}>
+                        {item.hidden ? '🙈 مخفي' : '👁 ظاهر'}
+                      </button>
+                      <button onClick={() => handleDeleteItem(item.id)}
+                        className="w-8 h-8 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white text-[10px] font-black transition-all flex items-center justify-center shrink-0">
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+            </div>
+            ) : (
             <div className="flex items-center justify-between gap-3">
               <div className="flex bg-black/80 backdrop-blur-md p-1 rounded-2xl gap-1 flex-wrap">
                 {FEATURES.dashboard && (
@@ -1933,11 +2132,12 @@ export default function App() {
             </section>
 
             </div>
-            )}
+            )} {/* end adminTab menu */}
+            )} {/* end isDemoMode ternary */}
           </div>
         )
       ) : (
-        <div className="pb-40">
+        <div className="pb-0">
           {/* Loading skeleton — shown until Firebase settings arrive */}
           {!settingsLoaded && (
             <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
@@ -2268,10 +2468,17 @@ export default function App() {
                 <p className="text-white/25 text-[10px] font-bold text-center sm:text-right">
                   جميع الحقوق محفوظة © {new Date().getFullYear()} — {settings.restaurantName}
                 </p>
-                <a href="https://synapse.dev" target="_blank" rel="noreferrer"
-                  className="text-white/35 hover:text-white/70 text-[10px] font-black uppercase tracking-widest transition-colors">
-                  صُنع بواسطة synapse.dev ⚡
-                </a>
+                <div className="flex items-center gap-4">
+                  <a href="https://synapse.dev" target="_blank" rel="noreferrer"
+                    className="text-white/35 hover:text-white/70 text-[10px] font-black uppercase tracking-widest transition-colors">
+                    صُنع بواسطة synapse.dev ⚡
+                  </a>
+                  <button
+                    onClick={() => navigateTo('owner')}
+                    className="text-white/20 hover:text-white/50 text-[9px] font-black uppercase tracking-widest transition-colors border border-white/10 hover:border-white/25 px-3 py-1.5 rounded-lg">
+                    🔒 الإدارة
+                  </button>
+                </div>
               </div>
 
             </div>
@@ -2468,14 +2675,6 @@ export default function App() {
           )}
           </div>
           )} {/* end settingsLoaded */}
-
-          {/* NAV PILL - bottom of page */}
-          <div className="flex justify-center py-8">
-            <div className="flex bg-black/90 backdrop-blur-md p-1 rounded-full border border-white/10 shadow-2xl">
-              <button onClick={() => navigateTo("customer")} className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'customer' ? 'text-white shadow-lg' : 'text-slate-500'}`} style={view === 'customer' ? { backgroundColor: settings.primaryColor } : {}}>المنيو</button>
-              <button onClick={() => navigateTo("owner")} className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${view === 'owner' ? 'bg-white text-black shadow-lg' : 'text-slate-500'}`}>الإدارة</button>
-            </div>
-          </div>
 
         </div>
       )}
