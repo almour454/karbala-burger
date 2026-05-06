@@ -1123,6 +1123,7 @@ export default function App() {
 
             </div>
             ) : (
+            <>
             <div className="flex items-center justify-between gap-3">
               <div className="flex bg-black/80 backdrop-blur-md p-1 rounded-2xl gap-1 flex-wrap">
                 {FEATURES.dashboard && (
@@ -2133,6 +2134,7 @@ export default function App() {
 
             </div>
             )} {/* end adminTab menu */}
+            </> 
             )} {/* end isDemoMode ternary */}
           </div>
         )
