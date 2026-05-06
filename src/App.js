@@ -354,96 +354,110 @@ export default function App() {
     if (!container) return;
 
     const FOOD_HTML = {
-      burger: `<svg viewBox="0 0 32 24" width="32" height="24" xmlns="http://www.w3.org/2000/svg"><ellipse cx="16" cy="21" rx="13" ry="3" fill="#C8854A"/><ellipse cx="16" cy="17" rx="12" ry="3" fill="#5C2E0A"/><path d="M3 14 Q7 11 11 14 Q14 11 16 14 Q20 11 24 14 Q27 11 29 14" fill="none" stroke="#5B8C3A" stroke-width="2.5" stroke-linecap="round"/><ellipse cx="16" cy="10" rx="12" ry="5.5" fill="#E8A25C"/><ellipse cx="16" cy="8.5" rx="10" ry="4" fill="#D4894A"/><circle cx="12" cy="7" r="1.3" fill="#C8854A" opacity="0.7"/><circle cx="16.5" cy="6" r="1.3" fill="#C8854A" opacity="0.7"/><circle cx="21" cy="7" r="1.3" fill="#C8854A" opacity="0.7"/></svg>`,
-      fries:  `<svg viewBox="0 0 20 26" width="20" height="26" xmlns="http://www.w3.org/2000/svg"><rect x="1.5" y="2" width="3.5" height="13" rx="1.75" fill="#FFD54F"/><rect x="6.5" y="0" width="3.5" height="15" rx="1.75" fill="#FFE082"/><rect x="11" y="1" width="3.5" height="13.5" rx="1.75" fill="#FFCA28"/><rect x="15.5" y="3" width="3" height="11" rx="1.5" fill="#FFD54F"/><path d="M0.5 14 L2.5 24.5 L17.5 24.5 L19.5 14 Z" fill="#E53935"/><path d="M0.5 14 L19.5 14" stroke="#C62828" stroke-width="1.2"/></svg>`,
-      pizza:  `<svg viewBox="0 0 26 28" width="26" height="28" xmlns="http://www.w3.org/2000/svg"><path d="M13 2 L24 25 L2 25 Z" fill="#FFA726"/><path d="M2 25 Q13 29.5 24 25 L22 25 Q13 28 4 25 Z" fill="#D4956A"/><circle cx="13" cy="16" r="2.5" fill="#E53935"/><circle cx="8.5" cy="20" r="2" fill="#E53935"/><circle cx="17.5" cy="20" r="2" fill="#E53935"/><circle cx="11" cy="11" r="1.5" fill="#E53935"/><circle cx="16" cy="10" r="1.2" fill="#66BB6A" opacity="0.9"/></svg>`,
-      chicken:`<svg viewBox="0 0 22 28" width="22" height="28" xmlns="http://www.w3.org/2000/svg"><ellipse cx="11" cy="9" rx="8" ry="7" fill="#C87A3E"/><ellipse cx="11" cy="9.5" rx="6.5" ry="5.5" fill="#E09B5A"/><path d="M8.5 13 Q9.5 12 11 12.5 Q12.5 12 13.5 13" fill="none" stroke="#A05C28" stroke-width="1.2" stroke-linecap="round"/><rect x="9" y="15" width="4" height="9" rx="2" fill="#F0E0C8"/><ellipse cx="11" cy="25" rx="4" ry="2.5" fill="#F0E0C8"/></svg>`,
+      burger:  `<svg viewBox="0 0 32 24" width="32" height="24" xmlns="http://www.w3.org/2000/svg"><ellipse cx="16" cy="21" rx="13" ry="3" fill="#C8854A"/><ellipse cx="16" cy="17" rx="12" ry="3" fill="#5C2E0A"/><path d="M3 14 Q7 11 11 14 Q14 11 16 14 Q20 11 24 14 Q27 11 29 14" fill="none" stroke="#5B8C3A" stroke-width="2.5" stroke-linecap="round"/><ellipse cx="16" cy="10" rx="12" ry="5.5" fill="#E8A25C"/><ellipse cx="16" cy="8.5" rx="10" ry="4" fill="#D4894A"/><circle cx="12" cy="7" r="1.3" fill="#C8854A" opacity="0.7"/><circle cx="16.5" cy="6" r="1.3" fill="#C8854A" opacity="0.7"/><circle cx="21" cy="7" r="1.3" fill="#C8854A" opacity="0.7"/></svg>`,
+      fries:   `<svg viewBox="0 0 20 26" width="20" height="26" xmlns="http://www.w3.org/2000/svg"><rect x="1.5" y="2" width="3.5" height="13" rx="1.75" fill="#FFD54F"/><rect x="6.5" y="0" width="3.5" height="15" rx="1.75" fill="#FFE082"/><rect x="11" y="1" width="3.5" height="13.5" rx="1.75" fill="#FFCA28"/><rect x="15.5" y="3" width="3" height="11" rx="1.5" fill="#FFD54F"/><path d="M0.5 14 L2.5 24.5 L17.5 24.5 L19.5 14 Z" fill="#E53935"/><path d="M0.5 14 L19.5 14" stroke="#C62828" stroke-width="1.2"/></svg>`,
+      pizza:   `<svg viewBox="0 0 26 28" width="26" height="28" xmlns="http://www.w3.org/2000/svg"><path d="M13 2 L24 25 L2 25 Z" fill="#FFA726"/><path d="M2 25 Q13 29.5 24 25 L22 25 Q13 28 4 25 Z" fill="#D4956A"/><circle cx="13" cy="16" r="2.5" fill="#E53935"/><circle cx="8.5" cy="20" r="2" fill="#E53935"/><circle cx="17.5" cy="20" r="2" fill="#E53935"/><circle cx="11" cy="11" r="1.5" fill="#E53935"/><circle cx="16" cy="10" r="1.2" fill="#66BB6A" opacity="0.9"/></svg>`,
+      chicken: `<svg viewBox="0 0 22 28" width="22" height="28" xmlns="http://www.w3.org/2000/svg"><ellipse cx="11" cy="9" rx="8" ry="7" fill="#C87A3E"/><ellipse cx="11" cy="9.5" rx="6.5" ry="5.5" fill="#E09B5A"/><path d="M8.5 13 Q9.5 12 11 12.5 Q12.5 12 13.5 13" fill="none" stroke="#A05C28" stroke-width="1.2" stroke-linecap="round"/><rect x="9" y="15" width="4" height="9" rx="2" fill="#F0E0C8"/><ellipse cx="11" cy="25" rx="4" ry="2.5" fill="#F0E0C8"/></svg>`,
       sandwich:`<svg viewBox="0 0 30 20" width="30" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M1.5 8 Q15 1.5 28.5 8 L28.5 10 Q15 3.5 1.5 10 Z" fill="#E8A25C"/><path d="M1.5 10 Q15 3.5 28.5 10 L28.5 11.5 Q15 5.5 1.5 11.5 Z" fill="#FFE082" opacity="0.8"/><rect x="1.5" y="11.5" width="27" height="2" fill="#5B8C3A"/><rect x="1.5" y="13" width="27" height="1.5" fill="#E53935"/><path d="M1.5 14.5 L1.5 17.5 Q15 19 28.5 17.5 L28.5 14.5 Q15 16.5 1.5 14.5 Z" fill="#D4956A"/></svg>`,
     };
 
     const TYPES = ['burger','fries','pizza','chicken','sandwich','burger','pizza','fries','chicken'];
     const NUM   = 9;
-    const cw    = () => container.offsetWidth;
-    const ch    = () => container.offsetHeight;
 
-    // Create DOM particles — NOT managed by React, cleaned up manually
     const particles = TYPES.slice(0, NUM).map((type, i) => {
       const el = document.createElement('div');
       el.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:0;will-change:transform;';
       el.innerHTML = FOOD_HTML[type];
       container.appendChild(el);
-      const startInView = i < 4; // first few already visible on load
+      const W = container.offsetWidth;
+      const H = container.offsetHeight;
+      const startInView = i < 4;
       return {
         el,
-        x:    (cw() / NUM) * i + Math.random() * (cw() / NUM * 0.6),
-        y:    startInView ? Math.random() * ch() : ch() + 20 + Math.random() * 80,
-        vx:   (Math.random() - 0.5) * 0.55,
-        vy:   -(0.55 + Math.random() * 0.45),
-        rot:  (Math.random() - 0.5) * 40,
-        rotV: (Math.random() - 0.5) * 0.45,
-        sc:   0.72 + Math.random() * 0.32,
+        x:        (W / NUM) * i + W / NUM * 0.3,
+        y:        startInView ? H * 0.2 + Math.random() * H * 0.6 : H + 20 + Math.random() * 100,
+        vx:       (Math.random() - 0.5) * 0.5,
+        vy:       -(0.55 + Math.random() * 0.4),
+        rot:      (Math.random() - 0.5) * 30,
+        rotV:     (Math.random() - 0.5) * 0.18, // slow gentle spin
+        sc:       0.75 + Math.random() * 0.3,
+        cooldown: 0,
       };
     });
 
-    // Collision boxes — measured once, refreshed on resize
+    // Collision boxes — container-relative coords
     let boxes = [];
     const measureBoxes = () => {
       const cr = container.getBoundingClientRect();
-      boxes = Array.from(
-        container.querySelectorAll('.hero-collision-target')
-      ).map(el => {
+      const targets = container.querySelectorAll('.hero-collision-target');
+      if (!targets.length) return;
+      boxes = Array.from(targets).map(el => {
         const r = el.getBoundingClientRect();
         return { l: r.left - cr.left, r: r.right - cr.left, t: r.top - cr.top, b: r.bottom - cr.top };
       });
     };
-    // Wait for entrance animations to settle before measuring
-    const measureTimer = setTimeout(measureBoxes, 1100);
+
+    // Measure after entrance animations settle, then keep refreshing
+    const t1 = setTimeout(measureBoxes, 1200);
+    const t2 = setInterval(measureBoxes, 4000);
     window.addEventListener('resize', measureBoxes);
 
     const tick = () => {
-      const W = cw(), H = ch();
+      const W = container.offsetWidth;
+      const H = container.offsetHeight;
+
       particles.forEach(p => {
+        if (p.cooldown > 0) p.cooldown--;
+
         p.x   += p.vx;
         p.y   += p.vy;
         p.rot += p.rotV;
 
-        // ── Collision with text boxes ──
-        const pw = 16 * p.sc, ph = 14 * p.sc;
-        boxes.forEach(box => {
-          if (p.x + pw > box.l && p.x - pw < box.r &&
-              p.y + ph > box.t && p.y - ph < box.b) {
-            p.vx  = -(p.vx * 1.4) + (Math.random() - 0.5) * 0.4;
-            p.rotV = -(p.rotV * 1.3);
-            p.vx  = Math.max(-2, Math.min(2, p.vx));
-            p.rotV = Math.max(-2, Math.min(2, p.rotV));
-            // eject horizontally so it doesn't get trapped
-            p.x += p.vx * 4;
+        // ── Collision: only check when not in cooldown ──
+        if (p.cooldown === 0 && boxes.length > 0) {
+          const half = 15 * p.sc;
+          for (const box of boxes) {
+            if (p.x + half > box.l && p.x - half < box.r &&
+                p.y + half > box.t && p.y - half < box.b) {
+              // Reverse horizontal + slight randomness
+              p.vx = -p.vx + (Math.random() - 0.5) * 0.25;
+              p.vx = Math.max(-1.6, Math.min(1.6, p.vx));
+              p.rotV = -p.rotV * 1.1;
+              // Hard-eject to the correct side so it can't re-enter immediately
+              const midX = (box.l + box.r) / 2;
+              p.x = (p.x > midX) ? box.r + half + 2 : box.l - half - 2;
+              // Freeze collision checks for ~50 frames (~0.8s at 60fps)
+              p.cooldown = 50;
+              break;
+            }
           }
-        });
+        }
 
-        // Bounce off sides
+        // Soft wall bounce
         if (p.x < 0)  { p.x = 0;  p.vx =  Math.abs(p.vx); }
         if (p.x > W)  { p.x = W;  p.vx = -Math.abs(p.vx); }
 
-        // Reset when past top
+        // Reset when particle exits top
         if (p.y < -60) {
-          p.x    = Math.random() * W;
-          p.y    = H + 20;
-          p.vx   = (Math.random() - 0.5) * 0.55;
-          p.vy   = -(0.55 + Math.random() * 0.45);
-          p.rot  = (Math.random() - 0.5) * 40;
-          p.rotV = (Math.random() - 0.5) * 0.45;
+          p.x      = Math.random() * W;
+          p.y      = H + 15;
+          p.vx     = (Math.random() - 0.5) * 0.5;
+          p.vy     = -(0.55 + Math.random() * 0.4);
+          p.rot    = (Math.random() - 0.5) * 30;
+          p.rotV   = (Math.random() - 0.5) * 0.18;
+          p.cooldown = 0;
         }
 
-        // Opacity: fade in from bottom, fade out at top
+        // Opacity: fade in at bottom, fade out near top
         const prog = 1 - p.y / H;
-        const op = prog < 0.07  ? (prog / 0.07) * 0.55
-                 : prog > 0.82  ? ((1 - prog) / 0.18) * 0.55
-                 : 0.55;
+        const op = prog < 0.07  ? prog / 0.07 * 0.52
+                 : prog > 0.84  ? (1 - prog) / 0.16 * 0.52
+                 : 0.52;
 
-        p.el.style.opacity   = Math.max(0, op);
-        p.el.style.transform = `translate(${p.x}px,${p.y}px) rotate(${p.rot}deg) scale(${p.sc})`;
+        p.el.style.opacity   = Math.max(0, op).toFixed(3);
+        p.el.style.transform = `translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px) rotate(${p.rot.toFixed(1)}deg) scale(${p.sc})`;
       });
+
       particleRafRef.current = requestAnimationFrame(tick);
     };
 
@@ -451,7 +465,8 @@ export default function App() {
 
     return () => {
       cancelAnimationFrame(particleRafRef.current);
-      clearTimeout(measureTimer);
+      clearTimeout(t1);
+      clearInterval(t2);
       window.removeEventListener('resize', measureBoxes);
       particles.forEach(p => p.el.parentNode?.removeChild(p.el));
     };
