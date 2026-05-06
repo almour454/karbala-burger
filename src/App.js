@@ -374,85 +374,44 @@ export default function App() {
       const startInView = i < 4;
       return {
         el,
-        x:        (W / NUM) * i + W / NUM * 0.3,
-        y:        startInView ? H * 0.2 + Math.random() * H * 0.6 : H + 20 + Math.random() * 100,
-        vx:       (Math.random() - 0.5) * 0.5,
-        vy:       -(0.55 + Math.random() * 0.4),
-        rot:      (Math.random() - 0.5) * 30,
-        rotV:     (Math.random() - 0.5) * 0.18, // slow gentle spin
-        sc:       0.75 + Math.random() * 0.3,
-        cooldown: 0,
+        x:    (W / NUM) * i + (W / NUM) * 0.3,
+        y:    startInView ? H * 0.15 + Math.random() * H * 0.7 : H + 20 + Math.random() * 120,
+        vx:   (Math.random() - 0.5) * 0.45,
+        vy:   -(0.5 + Math.random() * 0.4),
+        rot:  (Math.random() - 0.5) * 30,
+        rotV: (Math.random() - 0.5) * 0.15,
+        sc:   0.75 + Math.random() * 0.3,
       };
     });
-
-    // Collision boxes — container-relative coords
-    let boxes = [];
-    const measureBoxes = () => {
-      const cr = container.getBoundingClientRect();
-      const targets = container.querySelectorAll('.hero-collision-target');
-      if (!targets.length) return;
-      boxes = Array.from(targets).map(el => {
-        const r = el.getBoundingClientRect();
-        return { l: r.left - cr.left, r: r.right - cr.left, t: r.top - cr.top, b: r.bottom - cr.top };
-      });
-    };
-
-    // Measure after entrance animations settle, then keep refreshing
-    const t1 = setTimeout(measureBoxes, 1200);
-    const t2 = setInterval(measureBoxes, 4000);
-    window.addEventListener('resize', measureBoxes);
 
     const tick = () => {
       const W = container.offsetWidth;
       const H = container.offsetHeight;
 
       particles.forEach(p => {
-        if (p.cooldown > 0) p.cooldown--;
-
         p.x   += p.vx;
         p.y   += p.vy;
         p.rot += p.rotV;
 
-        // ── Collision: only check when not in cooldown ──
-        if (p.cooldown === 0 && boxes.length > 0) {
-          const half = 15 * p.sc;
-          for (const box of boxes) {
-            if (p.x + half > box.l && p.x - half < box.r &&
-                p.y + half > box.t && p.y - half < box.b) {
-              // Reverse horizontal + slight randomness
-              p.vx = -p.vx + (Math.random() - 0.5) * 0.25;
-              p.vx = Math.max(-1.6, Math.min(1.6, p.vx));
-              p.rotV = -p.rotV * 1.1;
-              // Hard-eject to the correct side so it can't re-enter immediately
-              const midX = (box.l + box.r) / 2;
-              p.x = (p.x > midX) ? box.r + half + 2 : box.l - half - 2;
-              // Freeze collision checks for ~50 frames (~0.8s at 60fps)
-              p.cooldown = 50;
-              break;
-            }
-          }
-        }
-
-        // Soft wall bounce
-        if (p.x < 0)  { p.x = 0;  p.vx =  Math.abs(p.vx); }
-        if (p.x > W)  { p.x = W;  p.vx = -Math.abs(p.vx); }
+        // Soft wall drift — nudge back gently instead of hard bounce
+        if (p.x < 0)  { p.vx += 0.05; }
+        if (p.x > W)  { p.vx -= 0.05; }
 
         // Reset when particle exits top
         if (p.y < -60) {
-          p.x      = Math.random() * W;
-          p.y      = H + 15;
-          p.vx     = (Math.random() - 0.5) * 0.5;
-          p.vy     = -(0.55 + Math.random() * 0.4);
-          p.rot    = (Math.random() - 0.5) * 30;
-          p.rotV   = (Math.random() - 0.5) * 0.18;
-          p.cooldown = 0;
+          p.x    = Math.random() * W;
+          p.y    = H + 15;
+          p.vx   = (Math.random() - 0.5) * 0.45;
+          p.vy   = -(0.5 + Math.random() * 0.4);
+          p.rot  = (Math.random() - 0.5) * 30;
+          p.rotV = (Math.random() - 0.5) * 0.15;
         }
 
-        // Opacity: fade in at bottom, fade out near top
+        // Fade in at bottom, fade out near top
         const prog = 1 - p.y / H;
-        const op = prog < 0.07  ? prog / 0.07 * 0.52
-                 : prog > 0.84  ? (1 - prog) / 0.16 * 0.52
-                 : 0.52;
+        const op = prog < 0.08  ? prog / 0.08 * 0.5
+                 : prog > 0.82  ? (1 - prog) / 0.18 * 0.5
+                 : 0.5;
 
         p.el.style.opacity   = Math.max(0, op).toFixed(3);
         p.el.style.transform = `translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px) rotate(${p.rot.toFixed(1)}deg) scale(${p.sc})`;
@@ -465,9 +424,6 @@ export default function App() {
 
     return () => {
       cancelAnimationFrame(particleRafRef.current);
-      clearTimeout(t1);
-      clearInterval(t2);
-      window.removeEventListener('resize', measureBoxes);
       particles.forEach(p => p.el.parentNode?.removeChild(p.el));
     };
   }, [settingsLoaded, view]);
