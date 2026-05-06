@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { initializeApp } from "firebase/app";
 import { 
   getFirestore, 
@@ -130,6 +130,10 @@ export default function App() {
   const [view, setView] = useState("customer"); 
   const [user, setUser] = useState(null);
   const [activeCategory, setActiveCategory] = useState("الكل");
+
+  // Particle system refs
+  const heroParticleRef = useRef(null);
+  const particleRafRef  = useRef(null);
   
   const [menuItems, setMenuItems] = useState([]);
   const [categories, setCategories] = useState(["برجر", "مقبلات", "مشروبات"]);
@@ -342,6 +346,116 @@ export default function App() {
     const interval = setInterval(check, 60000);
     return () => clearInterval(interval);
   }, [isUnlocked, dayConfirmed, settings.dayCloseHour]);
+
+  // ── FOOD PARTICLE PHYSICS SYSTEM ──
+  useEffect(() => {
+    if (!settingsLoaded || view !== 'customer') return;
+    const container = heroParticleRef.current;
+    if (!container) return;
+
+    const FOOD_HTML = {
+      burger: `<svg viewBox="0 0 32 24" width="32" height="24" xmlns="http://www.w3.org/2000/svg"><ellipse cx="16" cy="21" rx="13" ry="3" fill="#C8854A"/><ellipse cx="16" cy="17" rx="12" ry="3" fill="#5C2E0A"/><path d="M3 14 Q7 11 11 14 Q14 11 16 14 Q20 11 24 14 Q27 11 29 14" fill="none" stroke="#5B8C3A" stroke-width="2.5" stroke-linecap="round"/><ellipse cx="16" cy="10" rx="12" ry="5.5" fill="#E8A25C"/><ellipse cx="16" cy="8.5" rx="10" ry="4" fill="#D4894A"/><circle cx="12" cy="7" r="1.3" fill="#C8854A" opacity="0.7"/><circle cx="16.5" cy="6" r="1.3" fill="#C8854A" opacity="0.7"/><circle cx="21" cy="7" r="1.3" fill="#C8854A" opacity="0.7"/></svg>`,
+      fries:  `<svg viewBox="0 0 20 26" width="20" height="26" xmlns="http://www.w3.org/2000/svg"><rect x="1.5" y="2" width="3.5" height="13" rx="1.75" fill="#FFD54F"/><rect x="6.5" y="0" width="3.5" height="15" rx="1.75" fill="#FFE082"/><rect x="11" y="1" width="3.5" height="13.5" rx="1.75" fill="#FFCA28"/><rect x="15.5" y="3" width="3" height="11" rx="1.5" fill="#FFD54F"/><path d="M0.5 14 L2.5 24.5 L17.5 24.5 L19.5 14 Z" fill="#E53935"/><path d="M0.5 14 L19.5 14" stroke="#C62828" stroke-width="1.2"/></svg>`,
+      pizza:  `<svg viewBox="0 0 26 28" width="26" height="28" xmlns="http://www.w3.org/2000/svg"><path d="M13 2 L24 25 L2 25 Z" fill="#FFA726"/><path d="M2 25 Q13 29.5 24 25 L22 25 Q13 28 4 25 Z" fill="#D4956A"/><circle cx="13" cy="16" r="2.5" fill="#E53935"/><circle cx="8.5" cy="20" r="2" fill="#E53935"/><circle cx="17.5" cy="20" r="2" fill="#E53935"/><circle cx="11" cy="11" r="1.5" fill="#E53935"/><circle cx="16" cy="10" r="1.2" fill="#66BB6A" opacity="0.9"/></svg>`,
+      chicken:`<svg viewBox="0 0 22 28" width="22" height="28" xmlns="http://www.w3.org/2000/svg"><ellipse cx="11" cy="9" rx="8" ry="7" fill="#C87A3E"/><ellipse cx="11" cy="9.5" rx="6.5" ry="5.5" fill="#E09B5A"/><path d="M8.5 13 Q9.5 12 11 12.5 Q12.5 12 13.5 13" fill="none" stroke="#A05C28" stroke-width="1.2" stroke-linecap="round"/><rect x="9" y="15" width="4" height="9" rx="2" fill="#F0E0C8"/><ellipse cx="11" cy="25" rx="4" ry="2.5" fill="#F0E0C8"/></svg>`,
+      sandwich:`<svg viewBox="0 0 30 20" width="30" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M1.5 8 Q15 1.5 28.5 8 L28.5 10 Q15 3.5 1.5 10 Z" fill="#E8A25C"/><path d="M1.5 10 Q15 3.5 28.5 10 L28.5 11.5 Q15 5.5 1.5 11.5 Z" fill="#FFE082" opacity="0.8"/><rect x="1.5" y="11.5" width="27" height="2" fill="#5B8C3A"/><rect x="1.5" y="13" width="27" height="1.5" fill="#E53935"/><path d="M1.5 14.5 L1.5 17.5 Q15 19 28.5 17.5 L28.5 14.5 Q15 16.5 1.5 14.5 Z" fill="#D4956A"/></svg>`,
+    };
+
+    const TYPES = ['burger','fries','pizza','chicken','sandwich','burger','pizza','fries','chicken'];
+    const NUM   = 9;
+    const cw    = () => container.offsetWidth;
+    const ch    = () => container.offsetHeight;
+
+    // Create DOM particles — NOT managed by React, cleaned up manually
+    const particles = TYPES.slice(0, NUM).map((type, i) => {
+      const el = document.createElement('div');
+      el.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:0;will-change:transform;';
+      el.innerHTML = FOOD_HTML[type];
+      container.appendChild(el);
+      const startInView = i < 4; // first few already visible on load
+      return {
+        el,
+        x:    (cw() / NUM) * i + Math.random() * (cw() / NUM * 0.6),
+        y:    startInView ? Math.random() * ch() : ch() + 20 + Math.random() * 80,
+        vx:   (Math.random() - 0.5) * 0.55,
+        vy:   -(0.55 + Math.random() * 0.45),
+        rot:  (Math.random() - 0.5) * 40,
+        rotV: (Math.random() - 0.5) * 0.45,
+        sc:   0.72 + Math.random() * 0.32,
+      };
+    });
+
+    // Collision boxes — measured once, refreshed on resize
+    let boxes = [];
+    const measureBoxes = () => {
+      const cr = container.getBoundingClientRect();
+      boxes = Array.from(
+        container.querySelectorAll('.hero-collision-target')
+      ).map(el => {
+        const r = el.getBoundingClientRect();
+        return { l: r.left - cr.left, r: r.right - cr.left, t: r.top - cr.top, b: r.bottom - cr.top };
+      });
+    };
+    // Wait for entrance animations to settle before measuring
+    const measureTimer = setTimeout(measureBoxes, 1100);
+    window.addEventListener('resize', measureBoxes);
+
+    const tick = () => {
+      const W = cw(), H = ch();
+      particles.forEach(p => {
+        p.x   += p.vx;
+        p.y   += p.vy;
+        p.rot += p.rotV;
+
+        // ── Collision with text boxes ──
+        const pw = 16 * p.sc, ph = 14 * p.sc;
+        boxes.forEach(box => {
+          if (p.x + pw > box.l && p.x - pw < box.r &&
+              p.y + ph > box.t && p.y - ph < box.b) {
+            p.vx  = -(p.vx * 1.4) + (Math.random() - 0.5) * 0.4;
+            p.rotV = -(p.rotV * 1.3);
+            p.vx  = Math.max(-2, Math.min(2, p.vx));
+            p.rotV = Math.max(-2, Math.min(2, p.rotV));
+            // eject horizontally so it doesn't get trapped
+            p.x += p.vx * 4;
+          }
+        });
+
+        // Bounce off sides
+        if (p.x < 0)  { p.x = 0;  p.vx =  Math.abs(p.vx); }
+        if (p.x > W)  { p.x = W;  p.vx = -Math.abs(p.vx); }
+
+        // Reset when past top
+        if (p.y < -60) {
+          p.x    = Math.random() * W;
+          p.y    = H + 20;
+          p.vx   = (Math.random() - 0.5) * 0.55;
+          p.vy   = -(0.55 + Math.random() * 0.45);
+          p.rot  = (Math.random() - 0.5) * 40;
+          p.rotV = (Math.random() - 0.5) * 0.45;
+        }
+
+        // Opacity: fade in from bottom, fade out at top
+        const prog = 1 - p.y / H;
+        const op = prog < 0.07  ? (prog / 0.07) * 0.55
+                 : prog > 0.82  ? ((1 - prog) / 0.18) * 0.55
+                 : 0.55;
+
+        p.el.style.opacity   = Math.max(0, op);
+        p.el.style.transform = `translate(${p.x}px,${p.y}px) rotate(${p.rot}deg) scale(${p.sc})`;
+      });
+      particleRafRef.current = requestAnimationFrame(tick);
+    };
+
+    particleRafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(particleRafRef.current);
+      clearTimeout(measureTimer);
+      window.removeEventListener('resize', measureBoxes);
+      particles.forEach(p => p.el.parentNode?.removeChild(p.el));
+    };
+  }, [settingsLoaded, view]);
 
   // Auto-grey: move active orders older than autoGreyHours to finished
   useEffect(() => {
@@ -1864,100 +1978,14 @@ export default function App() {
           {settingsLoaded && (
           <div>
           {/* CUSTOMER HEADER */}
-          <header className="pt-10 pb-8 px-6 text-center relative overflow-hidden">
+          <header ref={heroParticleRef} className="pt-10 pb-8 px-6 text-center relative overflow-hidden">
 
             {/* ── A: BREATHING BACKGROUND GLOW ── */}
             <div className="hero-breath-bg pointer-events-none absolute inset-0"
               style={{ background: `radial-gradient(ellipse 75% 60% at 50% 30%, ${settings.primaryColor}22 0%, transparent 70%)` }} />
 
-            {/* ── E: FLOATING FOOD PARTICLES ── */}
-            {[
-              // type, left%, delay, dur, scale, rot
-              { t:'burger',    left:'4%',  delay:'0s',    dur:'8s',   sc:0.9,  rot:'-12deg' },
-              { t:'fries',     left:'16%', delay:'3.2s',  dur:'10s',  sc:0.75, rot:'8deg'   },
-              { t:'pizza',     left:'28%', delay:'1.2s',  dur:'9s',   sc:0.95, rot:'-6deg'  },
-              { t:'chicken',   left:'42%', delay:'4.5s',  dur:'8.5s', sc:0.8,  rot:'14deg'  },
-              { t:'sandwich',  left:'56%', delay:'2s',    dur:'11s',  sc:0.85, rot:'-10deg' },
-              { t:'burger',    left:'69%', delay:'0.5s',  dur:'9.5s', sc:0.7,  rot:'6deg'   },
-              { t:'pizza',     left:'80%', delay:'3s',    dur:'8s',   sc:0.9,  rot:'-16deg' },
-              { t:'fries',     left:'88%', delay:'1.8s',  dur:'10.5s',sc:0.75, rot:'18deg'  },
-              { t:'chicken',   left:'96%', delay:'5.5s',  dur:'9s',   sc:0.8,  rot:'-8deg'  },
-            ].map((p, i) => {
-              const svgs = {
-                burger: (
-                  <svg viewBox="0 0 32 24" width="32" height="24" xmlns="http://www.w3.org/2000/svg">
-                    <ellipse cx="16" cy="21" rx="13" ry="3" fill="#C8854A"/>
-                    <ellipse cx="16" cy="17" rx="12" ry="3" fill="#5C2E0A"/>
-                    <path d="M3 14 Q7 11 11 14 Q14 11 16 14 Q20 11 24 14 Q27 11 29 14" fill="none" stroke="#5B8C3A" strokeWidth="2.5" strokeLinecap="round"/>
-                    <ellipse cx="16" cy="10" rx="12" ry="5.5" fill="#E8A25C"/>
-                    <ellipse cx="16" cy="8.5" rx="10" ry="4" fill="#D4894A"/>
-                    <circle cx="12" cy="7" r="1.3" fill="#C8854A" opacity="0.7"/>
-                    <circle cx="16.5" cy="6" r="1.3" fill="#C8854A" opacity="0.7"/>
-                    <circle cx="21" cy="7" r="1.3" fill="#C8854A" opacity="0.7"/>
-                  </svg>
-                ),
-                fries: (
-                  <svg viewBox="0 0 20 26" width="20" height="26" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="1.5" y="2" width="3.5" height="13" rx="1.75" fill="#FFD54F"/>
-                    <rect x="6.5" y="0" width="3.5" height="15" rx="1.75" fill="#FFE082"/>
-                    <rect x="11" y="1" width="3.5" height="13.5" rx="1.75" fill="#FFCA28"/>
-                    <rect x="15.5" y="3" width="3" height="11" rx="1.5" fill="#FFD54F"/>
-                    <path d="M0.5 14 L2.5 24.5 L17.5 24.5 L19.5 14 Z" fill="#E53935"/>
-                    <path d="M0.5 14 L19.5 14" stroke="#C62828" strokeWidth="1.2"/>
-                    <rect x="7" y="16" width="6" height="1.5" rx="0.75" fill="#FF7043" opacity="0.5"/>
-                  </svg>
-                ),
-                pizza: (
-                  <svg viewBox="0 0 26 28" width="26" height="28" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M13 2 L24 25 L2 25 Z" fill="#FFA726"/>
-                    <path d="M2 25 Q13 29.5 24 25 L22 25 Q13 28 4 25 Z" fill="#D4956A"/>
-                    <circle cx="13" cy="16" r="2.5" fill="#E53935"/>
-                    <circle cx="8.5" cy="20" r="2" fill="#E53935"/>
-                    <circle cx="17.5" cy="20" r="2" fill="#E53935"/>
-                    <circle cx="11" cy="11" r="1.5" fill="#E53935"/>
-                    <circle cx="16" cy="10" r="1.2" fill="#66BB6A" opacity="0.9"/>
-                    <circle cx="9" cy="14" r="1.2" fill="#66BB6A" opacity="0.9"/>
-                  </svg>
-                ),
-                chicken: (
-                  <svg viewBox="0 0 22 28" width="22" height="28" xmlns="http://www.w3.org/2000/svg">
-                    <ellipse cx="11" cy="9" rx="8" ry="7" fill="#C87A3E"/>
-                    <ellipse cx="11" cy="9.5" rx="6.5" ry="5.5" fill="#E09B5A"/>
-                    <path d="M8.5 13 Q9.5 12 11 12.5 Q12.5 12 13.5 13" fill="none" stroke="#A05C28" strokeWidth="1.2" strokeLinecap="round"/>
-                    <rect x="9" y="15" width="4" height="9" rx="2" fill="#F0E0C8"/>
-                    <ellipse cx="11" cy="25" rx="4" ry="2.5" fill="#F0E0C8"/>
-                    <ellipse cx="11" cy="24.5" rx="2.5" ry="1.5" fill="#E8D0B0"/>
-                  </svg>
-                ),
-                sandwich: (
-                  <svg viewBox="0 0 30 20" width="30" height="20" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M1.5 8 Q15 1.5 28.5 8 L28.5 10 Q15 3.5 1.5 10 Z" fill="#E8A25C"/>
-                    <path d="M1.5 10 Q15 3.5 28.5 10 L28.5 11.5 Q15 5.5 1.5 11.5 Z" fill="#FFE082" opacity="0.8"/>
-                    <rect x="1.5" y="11.5" width="27" height="2" fill="#5B8C3A"/>
-                    <rect x="1.5" y="13" width="27" height="1.5" fill="#E53935"/>
-                    <path d="M1.5 14.5 L1.5 17.5 Q15 19 28.5 17.5 L28.5 14.5 Q15 16.5 1.5 14.5 Z" fill="#D4956A"/>
-                  </svg>
-                ),
-              };
-              return (
-                <span key={i} className="hero-food-particle pointer-events-none absolute"
-                  style={{
-                    left: p.left,
-                    bottom: '-10px',
-                    '--rot': p.rot,
-                    '--sc': p.sc,
-                    transformOrigin: 'center bottom',
-                    animationDelay: p.delay,
-                    animationDuration: p.dur,
-                    opacity: 0,
-                  }}>
-                  {svgs[p.t]}
-                </span>
-              );
-            })}
-
             {/* ── D: STAGGERED ENTRANCE — LOGO ── */}
-            <div className="hero-enter-0">
+            <div className="hero-enter-0" style={{ position: 'relative', zIndex: 1 }}>
               {/* ── B: FLOATING LOGO — clean atmospheric glow, no box ── */}
               {settings.logoUrl ? (
                 <div className="flex justify-center mb-6">
@@ -1997,7 +2025,7 @@ export default function App() {
             </div>
 
             {/* ── D: STAGGERED ENTRANCE — TITLE ── */}
-            <div className="hero-enter-1">
+            <div className="hero-enter-1 hero-collision-target" style={{ position: 'relative', zIndex: 1 }}>
               {/* ── C: SHIMMER TITLE ── */}
               <h1 className="hero-title-shimmer text-5xl sm:text-6xl font-black italic uppercase tracking-tighter leading-tight text-slate-950 relative inline-block overflow-hidden">
                 {settings.restaurantName}
@@ -2006,7 +2034,7 @@ export default function App() {
             </div>
 
             {/* ── D: STAGGERED ENTRANCE — BADGE + LOCATION ── */}
-            <div className="mt-8 flex flex-col items-center gap-3 hero-enter-2">
+            <div className="mt-8 flex flex-col items-center gap-3 hero-enter-2 hero-collision-target" style={{ position: 'relative', zIndex: 1 }}>
               <div className="flex items-center gap-3 bg-black text-white px-6 py-2.5 rounded-full shadow-2xl">
                 <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
                 <span className="text-[11px] font-black uppercase tracking-widest">{settings.openingHours}</span>
@@ -2454,16 +2482,7 @@ export default function App() {
         .hero-enter-2 { animation: heroEnterUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.3s both; }
         .hero-enter-3 { animation: heroEnterUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.45s both; }
 
-        /* ── E: FLOATING FOOD PARTICLES ── */
-        @keyframes foodFloat {
-          0%   { transform: translateY(0px)    translateX(0px)   rotate(var(--rot)) scale(var(--sc)); opacity: 0; }
-          6%   { opacity: 0.55; }
-          35%  { transform: translateY(-140px) translateX(10px)  rotate(calc(var(--rot) + 10deg))  scale(var(--sc)); opacity: 0.5; }
-          65%  { transform: translateY(-280px) translateX(-8px)  rotate(calc(var(--rot) - 8deg))   scale(var(--sc)); opacity: 0.45; }
-          88%  { opacity: 0.3; }
-          100% { transform: translateY(-440px) translateX(6px)   rotate(calc(var(--rot) + 16deg))  scale(var(--sc)); opacity: 0; }
-        }
-        .hero-food-particle { animation: foodFloat ease-in-out infinite; position: absolute; }
+        /* ── E: FLOATING FOOD PARTICLES — handled by JS RAF system ── */
         @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-25%); } }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
