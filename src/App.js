@@ -1873,18 +1873,15 @@ export default function App() {
             {/* ── E: FLOATING FOOD PARTICLES ── */}
             {[
               // type, left%, delay, dur, scale, rot
-              { t:'burger',    left:'5%',  delay:'0s',    dur:'7s',   sc:0.85, rot:'-12deg' },
-              { t:'fries',     left:'14%', delay:'2.4s',  dur:'9s',   sc:0.7,  rot:'8deg'  },
-              { t:'pizza',     left:'24%', delay:'0.8s',  dur:'8s',   sc:0.9,  rot:'-6deg' },
-              { t:'chicken',   left:'35%', delay:'3.1s',  dur:'6.5s', sc:0.75, rot:'15deg' },
-              { t:'sandwich',  left:'46%', delay:'1.5s',  dur:'7.5s', sc:0.8,  rot:'-10deg'},
-              { t:'burger',    left:'57%', delay:'4s',    dur:'8.5s', sc:0.65, rot:'6deg'  },
-              { t:'fries',     left:'67%', delay:'0.3s',  dur:'7s',   sc:0.9,  rot:'-18deg'},
-              { t:'pizza',     left:'76%', delay:'2s',    dur:'9.5s', sc:0.7,  rot:'12deg' },
-              { t:'chicken',   left:'85%', delay:'1.1s',  dur:'6s',   sc:0.85, rot:'-8deg' },
-              { t:'sandwich',  left:'93%', delay:'3.5s',  dur:'8s',   sc:0.75, rot:'20deg' },
-              { t:'burger',    left:'31%', delay:'5s',    dur:'7.5s', sc:0.6,  rot:'-5deg' },
-              { t:'pizza',     left:'61%', delay:'1.8s',  dur:'10s',  sc:0.65, rot:'9deg'  },
+              { t:'burger',    left:'4%',  delay:'0s',    dur:'8s',   sc:0.9,  rot:'-12deg' },
+              { t:'fries',     left:'16%', delay:'3.2s',  dur:'10s',  sc:0.75, rot:'8deg'   },
+              { t:'pizza',     left:'28%', delay:'1.2s',  dur:'9s',   sc:0.95, rot:'-6deg'  },
+              { t:'chicken',   left:'42%', delay:'4.5s',  dur:'8.5s', sc:0.8,  rot:'14deg'  },
+              { t:'sandwich',  left:'56%', delay:'2s',    dur:'11s',  sc:0.85, rot:'-10deg' },
+              { t:'burger',    left:'69%', delay:'0.5s',  dur:'9.5s', sc:0.7,  rot:'6deg'   },
+              { t:'pizza',     left:'80%', delay:'3s',    dur:'8s',   sc:0.9,  rot:'-16deg' },
+              { t:'fries',     left:'88%', delay:'1.8s',  dur:'10.5s',sc:0.75, rot:'18deg'  },
+              { t:'chicken',   left:'96%', delay:'5.5s',  dur:'9s',   sc:0.8,  rot:'-8deg'  },
             ].map((p, i) => {
               const svgs = {
                 burger: (
@@ -2459,14 +2456,14 @@ export default function App() {
 
         /* ── E: FLOATING FOOD PARTICLES ── */
         @keyframes foodFloat {
-          0%   { transform: translateY(0)    translateX(0)    rotate(var(--rot)) scale(var(--sc)); opacity: 0; }
-          8%   { opacity: 0.75; }
-          40%  { transform: translateY(-55%) translateX(8px)  rotate(calc(var(--rot) + 8deg))  scale(var(--sc)); }
-          70%  { transform: translateY(-78%) translateX(-6px) rotate(calc(var(--rot) - 5deg))  scale(var(--sc)); }
-          90%  { opacity: 0.5; }
-          100% { transform: translateY(-105%) translateX(4px) rotate(calc(var(--rot) + 12deg)) scale(var(--sc)); opacity: 0; }
+          0%   { transform: translateY(0px)    translateX(0px)   rotate(var(--rot)) scale(var(--sc)); opacity: 0; }
+          6%   { opacity: 0.55; }
+          35%  { transform: translateY(-140px) translateX(10px)  rotate(calc(var(--rot) + 10deg))  scale(var(--sc)); opacity: 0.5; }
+          65%  { transform: translateY(-280px) translateX(-8px)  rotate(calc(var(--rot) - 8deg))   scale(var(--sc)); opacity: 0.45; }
+          88%  { opacity: 0.3; }
+          100% { transform: translateY(-440px) translateX(6px)   rotate(calc(var(--rot) + 16deg))  scale(var(--sc)); opacity: 0; }
         }
-        .hero-food-particle { animation: foodFloat ease-in-out infinite; }
+        .hero-food-particle { animation: foodFloat ease-in-out infinite; position: absolute; }
         @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-25%); } }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
