@@ -84,16 +84,26 @@ const DEMO_SEED_SETTINGS = {
   contactPhone1: "9647800000000", contactPhone2: "", contactPhone3: "",
   autoGreyHours: 5, printCopies: 2, dayCloseHour: 0, logoUrl: "",
 };
-const DEMO_SEED_CATEGORIES = ["برجر", "مقبلات", "مشروبات"];
+const DEMO_SEED_CATEGORIES = ["برجر", "دجاج", "مقبلات", "مشروبات", "حلويات"];
 const DEMO_SEED_ITEMS = [
-  { id:'di1', name:"برجر كلاسيك",       desc:"لحم بقري طازج مع خس وطماطم وجبن أمريكي",       price:12000, category:"برجر",     image:"https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80" },
-  { id:'di2', name:"برجر دبل تشيز",     desc:"قطعتان لحم مع جبن مزدوج وصوص خاص",              price:18000, salePrice:15000, category:"برجر",     image:"https://images.unsplash.com/photo-1553979459-d2229ba7433b?w=400&q=80" },
-  { id:'di3', name:"برجر دجاج مقرمش",   desc:"دجاج بانكو مقرمش مع مايونيز حار",                price:11000, category:"برجر",     image:"https://images.unsplash.com/photo-1606755962773-d324e0a13086?w=400&q=80" },
-  { id:'di4', name:"بطاطا مقلية",       desc:"بطاطا ذهبية مقرمشة مع كاتشاب",                  price:4000,  category:"مقبلات",   image:"https://images.unsplash.com/photo-1576107232684-1279f390859f?w=400&q=80" },
-  { id:'di5', name:"حلقات بصل",         desc:"حلقات بصل مقرمشة مع صوص البارميزان",              price:5000, salePrice:4000, category:"مقبلات",   image:"https://images.unsplash.com/photo-1639024471283-03518883512d?w=400&q=80" },
-  { id:'di6', name:"كولا",              desc:"مشروب غازي بارد 330 مل",                         price:2000,  category:"مشروبات",  image:"https://images.unsplash.com/photo-1629203851122-3726ecdf080e?w=400&q=80" },
-  { id:'di7', name:"عصير برتقال طازج",  desc:"عصير برتقال طبيعي 100٪",                         price:3500,  category:"مشروبات",  image:"https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=400&q=80" },
-  { id:'di8', name:"شيك شوكولا",        desc:"شيك كريمي بالشوكولا الداكنة",                    price:5000,  category:"مشروبات",  image:"https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=400&q=80" },
+  // ── BURGERS ──
+  { id:'di1',  name:"برجر كلاسيك",          desc:"لحم بقري طازج 180 جرام مع خس وطماطم وجبن أمريكي وصوص المطعم",                   price:12000,            category:"برجر",    image:"https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500&q=85" },
+  { id:'di2',  name:"برجر دبل سموك",         desc:"قطعتان لحم مدخن مع جبن مزدوج وبصل مكرمل وصوص BBQ الحار",                       price:18000, salePrice:15000, category:"برجر",    image:"https://images.unsplash.com/photo-1553979459-d2229ba7433b?w=500&q=85" },
+  { id:'di3',  name:"برجر مشروم وجبن",       desc:"لحم بقري مع فطر مشوي وجبن سويسري ذائب وصوص الثوم الكريمي",                    price:14000,            category:"برجر",    image:"https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=500&q=85" },
+  // ── CHICKEN ──
+  { id:'di4',  name:"دجاج مقرمش بانكو",      desc:"فيليه دجاج بعجينة بانكو ذهبية مع مايونيز حار وخس طازج",                        price:11000,            category:"دجاج",    image:"https://images.unsplash.com/photo-1562967914-608f82629710?w=500&q=85" },
+  { id:'di5',  name:"شاورما دجاج",           desc:"دجاج مشوي بالتوابل السرية مع صوص ثوم وطحينة وخيار مخلل",                       price:9000,             category:"دجاج",    image:"https://images.unsplash.com/photo-1633237308525-cd587cf71926?w=500&q=85" },
+  { id:'di6',  name:"أصابع دجاج مقرمشة",    desc:"ستة أصابع دجاج مقرمشة مع صوص الرانش والكاتشاب الحار",                          price:8000, salePrice:7000, category:"دجاج",    image:"https://images.unsplash.com/photo-1698803431583-35ef29694754?w=500&q=85" },
+  // ── SIDES ──
+  { id:'di7',  name:"بطاطا مقلية كلاسيك",    desc:"بطاطا ذهبية مقرمشة بالملح البحري مع كاتشاب بيت",                               price:4000,             category:"مقبلات",  image:"https://images.unsplash.com/photo-1576107232684-1279f390859f?w=500&q=85" },
+  { id:'di8',  name:"حلقات بصل مقرمشة",     desc:"حلقات بصل حلو بعجينة خفيفة مقرمشة مع صوص الرانش",                              price:5000, salePrice:4000, category:"مقبلات",  image:"https://images.unsplash.com/photo-1639024471283-03518883512d?w=500&q=85" },
+  // ── DRINKS ──
+  { id:'di9',  name:"كوكاكولا مثلجة",        desc:"مشروب غازي بارد 330 مل مع ثلج كثير",                                            price:2000,             category:"مشروبات", image:"https://images.unsplash.com/photo-1629203851122-3726ecdf080e?w=500&q=85" },
+  { id:'di10', name:"عصير برتقال طازج",       desc:"برتقال طازج معصور لحظياً 100٪ طبيعي بدون سكر مضاف",                            price:3500,             category:"مشروبات", image:"https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=500&q=85" },
+  { id:'di11', name:"شيك شوكولا بلجيكي",     desc:"شيك كريمي بالشوكولا البلجيكية الداكنة مع كريمة مخفوقة وتشوكليت",              price:5500,             category:"مشروبات", image:"https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=500&q=85" },
+  // ── DESSERTS ──
+  { id:'di12', name:"تشيز كيك لوتس",         desc:"تشيز كيك كريمي بارد مع صوص لوتس وبسكويت مقرمش من الأسفل",                     price:6000,             category:"حلويات",  image:"https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=500&q=85" },
+  { id:'di13', name:"كوكيز وكريم أيسكريم",   desc:"بسكويت شوكولا دافئ طازج مع كرة آيسكريم فانيلا وصوص كراميل",                   price:5000, salePrice:4500, category:"حلويات",  image:"https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=500&q=85" },
 ];
 // getDateStr: returns the "business day" date string.
 // If current hour is before closeHour (e.g. 12:30am and closeHour=1),
@@ -973,17 +983,6 @@ export default function App() {
               <input type="password" value={ownerPassword} onChange={e => setOwnerPassword(e.target.value)} className={`w-full bg-black border ${authError ? 'border-red-500 animate-shake' : 'border-white/10'} p-4 rounded-2xl text-white text-right outline-none focus:border-orange-500 text-sm font-bold`} placeholder="كلمة المرور" />
               {authError && <p className="mt-3 text-red-400 text-xs font-bold">{authError}</p>}
               <button type="submit" className="w-full mt-6 py-5 text-white font-black rounded-2xl text-[12px] uppercase tracking-widest shadow-xl transition-transform active:scale-95" style={{ backgroundColor: settings.primaryColor }}>دخول</button>
-              {/* Demo separator */}
-              <div className="flex items-center gap-3 my-5">
-                <div className="flex-1 h-px bg-white/10" />
-                <span className="text-white/25 text-[10px] font-black uppercase tracking-widest">أو</span>
-                <div className="flex-1 h-px bg-white/10" />
-              </div>
-              <button type="button" onClick={handleDemoLogin}
-                className="w-full py-4 rounded-2xl text-[12px] font-black tracking-wide transition-all active:scale-95 border border-white/15 text-white/70 hover:text-white hover:border-white/30 hover:bg-white/5">
-                ✨ جرّب النظام مجاناً — وضع العرض
-              </button>
-              <p className="text-white/20 text-[9px] font-bold mt-2">بيانات تجريبية — لا يؤثر على أي بيانات حقيقية</p>
             </form>
           </div>
         ) : (
@@ -2150,6 +2149,24 @@ export default function App() {
           {/* CUSTOMER CONTENT — only renders after settings load */}
           {settingsLoaded && (
           <div>
+
+          {/* ── FLOATING DEMO BUTTON ── */}
+          <button
+            onClick={handleDemoLogin}
+            className="demo-float-btn fixed z-[900] flex flex-col items-center justify-center gap-0.5 active:scale-90 transition-transform"
+            style={{ bottom: '5.5rem', left: '1rem' }}
+            title="جرّب النظام مجاناً"
+          >
+            <div className="relative w-14 h-14 rounded-full flex items-center justify-center shadow-2xl"
+              style={{ background: `linear-gradient(135deg, ${settings.primaryColor}, #7c2d12)`, boxShadow: `0 6px 28px ${settings.primaryColor}70` }}>
+              <div className="demo-ring-pulse absolute inset-0 rounded-full"
+                style={{ boxShadow: `0 0 0 6px ${settings.primaryColor}30, 0 0 0 12px ${settings.primaryColor}12` }} />
+              <span className="text-xl relative z-10">✨</span>
+            </div>
+            <span className="text-[9px] font-black text-white/70 tracking-wide"
+              style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>جرّب مجاناً</span>
+          </button>
+
           {/* CUSTOMER HEADER */}
           <header ref={heroParticleRef} className="pt-10 pb-8 px-6 text-center relative overflow-hidden">
 
@@ -2682,6 +2699,18 @@ export default function App() {
       )}
 
       <style dangerouslySetInnerHTML={{ __html: `
+        /* ── FLOATING DEMO BUTTON ── */
+        @keyframes demoBobble {
+          0%, 100% { transform: translateY(0) scale(1); }
+          50%       { transform: translateY(-5px) scale(1.04); }
+        }
+        @keyframes demoRingPulse {
+          0%, 100% { opacity: 0.7; transform: scale(1); }
+          50%       { opacity: 0;   transform: scale(1.45); }
+        }
+        .demo-float-btn { animation: demoBobble 2.8s ease-in-out infinite; }
+        .demo-ring-pulse { animation: demoRingPulse 2.2s ease-out infinite; }
+
         /* ── MENU CARDS — glass + hover dance ── */
         .menu-card {
           background: rgba(255, 255, 255, 0.70);
