@@ -657,4 +657,222 @@ export default function App() {
     if (!window.confirm('سيتم إضافة ' + DEMO_SEED_ITEMS.length + ' وجبات نموذجية بصور عالية الجودة إلى منيوك.\n\nالعناصر الحالية لن تُحذف — ستُضاف الجديدة فقط.\n\nهل تريد المتابعة؟')) return;
     setSaveStatus('⏳ جارٍ تحميل القائمة...');
     try {
-      fo
+      for (const item of DEMO_SEED_ITEMS) {
+        const id = 'seed_' + Date.now() + '_' + item.id;
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', id), {
+          name: item.name, desc: item.desc, price: item.price,
+          ...(item.salePrice ? { salePrice: item.salePrice } : {}),
+          category: item.category, image: item.image,
+          id, createdAt: new Date().toISOString(),
+        });
+      }
+      const merged = [...new Set([...categories, ...DEMO_SEED_CATEGORIES])];
+      await setDoc(getSettingsDoc(), { categories: merged }, { merge: true });
+      setCategories(merged);
+      setSaveStatus('✅ تم تحميل ' + DEMO_SEED_ITEMS.length + ' وجبة بنجاح!');
+      setTimeout(() => setSaveStatus(''), 4000);
+    } catch (e) {
+      setSaveStatus('❌ خطأ في التحميل');
+      console.error(e);
+    }
+  };
+
+  const addToCart = (item) => setCart(p => ({ ...p, [item.id]: (p[item.id] || 0) + 1 }));
+  const removeFromCart = (id) => setCart(p => {
+    const n = { ...p };
+    if (n[id] > 1) n[id]--; else delete n[id];
+    return n;
+  });
+
+  const removeCartLine = (id) => setCart(p => {
+    const n = { ...p };
+    delete n[id];
+    return n;
+  });
+
+  const clearCart = () => {
+    setCart({});
+    setIsCheckoutOpen(false);
+  };
+
+  const cartTotal = useMemo(() => Object.entries(cart).reduce((t, [id, q]) => {
+    const item = menuItems.find(m => m.id === id);
+    return item ? t + ((item.salePrice || item.price) * q) : t;
+  }, 0), [cart, menuItems]);
+
+  const deliveryFee = Math.max(0, Number(settings.deliveryFee) || 0);
+  const orderGrandTotal = cartTotal + deliveryFee;
+
+  const filteredItems = useMemo(() => {
+    const visible = menuItems.filter(item => !item.hidden);
+    if (activeCategory === "الكل") return visible;
+    return visible.filter(item => item.category === activeCategory);
+  }, [menuItems, activeCategory]);
+
+  const discountItems = useMemo(() => {
+    return menuItems.filter(item => !item.hidden && item.salePrice && item.salePrice < item.price);
+  }, [menuItems]);
+
+  useEffect(() => {
+    if (isCheckoutOpen && Object.keys(cart).length === 0) {
+      setIsCheckoutOpen(false);
+    }
+  }, [cart, isCheckoutOpen]);
+
+  const updateOrderStatus = async (orderId, status, dateStr) => {
+    try {
+      const d = dateStr || getDateStr(settings.dayCloseHour);
+      await updateDoc(doc(db, 'artifacts', appId, 'private', 'data', 'orders', d, 'items', orderId), { status });
+    } catch (e) { console.error(e); }
+  };
+
+  const saveOrderToFirebase = async () => {
+    const d = getDateStr(settings.dayCloseHour);
+    const counterRef = getOrderCounterDoc(d);
+    const ordersCol = getOrdersCollection(d);
+
+    // Atomically increment counter — counter lives in public/ so anonymous users can read+write
+    let orderNumber = 1;
+    await runTransaction(db, async (tx) => {
+      const counterSnap = await tx.get(counterRef);
+      orderNumber = counterSnap.exists() ? (counterSnap.data().count || 0) + 1 : 1;
+      tx.set(counterRef, { count: orderNumber }, { merge: true });
+    });
+
+    await addDoc(ordersCol, {
+      orderNumber,
+      customerName,
+      customerPhone,
+      address,
+      items: Object.entries(cart).map(([id, qty]) => {
+        const it = menuItems.find(m => m.id === id);
+        return { id, name: it?.name || id, qty, price: it?.salePrice || it?.price || 0 };
+      }),
+      cartTotal,
+      deliveryFee,
+      grandTotal: orderGrandTotal,
+      status: "active",
+      createdAt: new Date().toISOString(),
+      dateStr: d
+    });
+
+    return orderNumber;
+  };
+
+  const loadHistoryOrders = async (dateStr) => {
+    setHistoryLoading(true);
+    setHistoryOrders([]);
+    try {
+      const q = query(getOrdersCollection(dateStr), orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
+      setHistoryOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (e) {
+      console.error(e);
+      setHistoryOrders([]);
+    }
+    setHistoryLoading(false);
+  };
+
+  const clearAfterOrder = (orderNum) => {
+    setCart({});
+    setIsCheckoutOpen(false);
+    setCustomerName("");
+    setCustomerPhone("");
+    setAddress("");
+    setOrderSubmitting(false);
+    if (orderNum) setConfirmedOrderNum(orderNum);
+  };
+
+  // Returns false and sets error if offline
+  // navigator.onLine is unreliable on mobile/cellular — removed.
+  // Firebase itself will throw if there's truly no connection.
+  const checkOnline = () => true;
+
+  const sendWhatsApp = async () => {
+    if (!checkOnline()) return;
+    setOrderSubmitting(true);
+    setOrderError(null);
+    const itemsStr = Object.entries(cart).map(([id, q]) => {
+      const it = menuItems.find(m=>m.id===id);
+      return `${q}x ${it?.name}`;
+    }).join('\n');
+    const feeLine = deliveryFee > 0
+      ? `\nمجموع الأصناف: ${cartTotal.toLocaleString()} د.ع\nرسوم التوصيل: ${deliveryFee.toLocaleString()} د.ع\nالإجمالي: ${orderGrandTotal.toLocaleString()} د.ع`
+      : `\nالمجموع: ${cartTotal.toLocaleString()} د.ع`;
+    let orderNum = null;
+    try {
+      orderNum = await saveOrderToFirebase();
+    } catch (e) {
+      console.error(e);
+      setOrderError("failed");
+      setOrderSubmitting(false);
+      return;
+    }
+    const numLine = orderNum ? `\nرقم الطلب: #${orderNum}\n` : '';
+    const text = `طلب جديد 🍔${numLine}\nالاسم: ${customerName}\nالهاتف: ${customerPhone}\nالعنوان: ${address}\n\nالأصناف:\n${itemsStr}${feeLine}`;
+    window.open(`https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(text)}`);
+    clearAfterOrder(orderNum);
+  };
+
+  const sendDashboardOnly = async () => {
+    if (!checkOnline()) return;
+    setOrderSubmitting(true);
+    setOrderError(null);
+    try {
+      const orderNum = await saveOrderToFirebase();
+      clearAfterOrder(orderNum);
+    } catch (e) {
+      console.error(e);
+      setOrderError("failed");
+      setOrderSubmitting(false);
+    }
+  };
+
+  const buildReceiptHtml = (order) => {
+    // Sanitize user-supplied strings before injecting into HTML
+    const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const time = order.createdAt
+      ? new Date(order.createdAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })
+      : '';
+    const rows = (order.items || [])
+      .map(it => `<div class="row"><span>${esc(it.name)}</span><span>x${it.qty} ${((it.price||0)*it.qty).toLocaleString()}</span></div>`)
+      .join('');
+    const deliveryRow = order.deliveryFee > 0
+      ? `<div class="row"><span>توصيل</span><span>${order.deliveryFee.toLocaleString()}</span></div>`
+      : '';
+    return `<html><head><meta charset="utf-8"/>
+      <style>
+        @page { size: 58mm auto; margin: 2mm; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Courier New', monospace; direction: rtl;
+               font-size: 11px; width: 54mm; margin: 0; padding: 0; }
+        h1 { font-size: 13px; font-weight: 900; text-align: center; margin: 0 0 1mm; }
+        .num { font-size: 28px; font-weight: 900; text-align: center;
+               line-height: 1; margin: 2mm 0; letter-spacing: -1px; }
+        .center { text-align: center; }
+        .meta { font-size: 9px; color: #444; margin: 0.5mm 0; }
+        .row { display: flex; justify-content: space-between;
+               padding: 1mm 0; border-bottom: 1px dotted #999; font-size: 10px; }
+        .total { display: flex; justify-content: space-between;
+                 font-weight: 900; font-size: 12px; margin-top: 2mm; }
+        hr { border: none; border-top: 1px dashed #333; margin: 2mm 0; }
+        .thanks { text-align: center; font-size: 9px; margin-top: 3mm; }
+        @media print {
+          body { width: 54mm; }
+          html { width: 58mm; }
+        }
+      </style></head><body>
+      <h1>${settings.restaurantName}</h1>
+      <div class="meta center">${settings.restaurantNameAr}</div>
+      <hr/>
+      <div class="meta center">${order.dateStr || getDateStr(settings.dayCloseHour)} — ${time}</div>
+      <div class="num">#${order.orderNumber || '—'}</div>
+      <hr/>
+      <div class="meta"><b>${esc(order.customerName)}</b> — ${esc(order.customerPhone)}</div>
+      <div class="meta">📍 ${esc(order.address)}</div>
+      <hr/>
+      ${rows}${deliveryRow}
+      <div class="total"><span>الإجمالي</span><span>${(order.grandTotal||0).toLocaleString()} د.ع</span></div>
+      <hr/>
+      <div class="thanks">شكراً لطلبك 🍔</div>
+      <script>window.onload=()=>{window.print();window.close();}<\/scri

@@ -1178,6 +1178,10 @@ export default function App() {
                 className="bg-black text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-white hover:text-black border border-white/20 transition-colors shrink-0">
                 خروج
               </button>
+              <button type="button" onClick={() => navigateTo('customer')}
+                className="text-white/50 hover:text-white px-4 py-2 rounded-xl text-[11px] font-black border border-white/10 hover:border-white/25 transition-colors shrink-0">
+                ← المنيو
+              </button>
             </div>
 
             {/* ── ORDERS TAB ── */}
@@ -2200,18 +2204,24 @@ export default function App() {
           {/* ── FLOATING DEMO BUTTON ── */}
           <button
             onClick={handleDemoLogin}
-            className="demo-float-btn fixed z-[900] flex flex-col items-center justify-center gap-0.5 active:scale-90 transition-transform"
+            className="demo-float-btn fixed z-[900] active:scale-90 transition-transform"
             style={{ bottom: '5.5rem', left: '1rem' }}
-            title="جرّب النظام مجاناً"
           >
-            <div className="relative w-14 h-14 rounded-full flex items-center justify-center shadow-2xl"
-              style={{ background: `linear-gradient(135deg, ${settings.primaryColor}, #7c2d12)`, boxShadow: `0 6px 28px ${settings.primaryColor}70` }}>
+            <div className="relative flex items-center justify-center shadow-2xl rounded-full"
+              style={{
+                width: 72, height: 72,
+                background: `linear-gradient(135deg, ${settings.primaryColor} 0%, #7c2d12 100%)`,
+                boxShadow: `0 8px 32px ${settings.primaryColor}80, 0 2px 8px rgba(0,0,0,0.3)`,
+              }}>
+              {/* outer glow ring */}
               <div className="demo-ring-pulse absolute inset-0 rounded-full"
-                style={{ boxShadow: `0 0 0 6px ${settings.primaryColor}30, 0 0 0 12px ${settings.primaryColor}12` }} />
-              <span className="text-xl relative z-10">✨</span>
+                style={{ boxShadow: `0 0 0 8px ${settings.primaryColor}35, 0 0 0 18px ${settings.primaryColor}14` }} />
+              {/* white border ring */}
+              <div className="absolute inset-0 rounded-full" style={{ border: '2px solid rgba(255,255,255,0.25)' }} />
+              <span className="relative z-10 text-white font-black text-[11px] leading-tight text-center px-1">
+                جرّب<br/>الآن
+              </span>
             </div>
-            <span className="text-[9px] font-black text-white/70 tracking-wide"
-              style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>جرّب مجاناً</span>
           </button>
 
           {/* CUSTOMER HEADER */}
