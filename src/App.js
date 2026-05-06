@@ -380,7 +380,7 @@ export default function App() {
         vy:   -(0.5 + Math.random() * 0.4),
         rot:  (Math.random() - 0.5) * 30,
         rotV: (Math.random() - 0.5) * 0.15,
-        sc:   0.75 + Math.random() * 0.3,
+        sc:   0.35 + Math.random() * 0.15,
       };
     });
 
