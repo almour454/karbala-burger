@@ -2328,13 +2328,13 @@ export default function App() {
                       <a
                         key={`contact-phone-${idx}`}
                         href={toTelHref(num)}
-                        dir="ltr"
-                        className="inline-flex items-center gap-1.5 h-10 px-3 rounded-full bg-white border border-black/10 text-slate-700 hover:border-slate-300 hover:shadow-md transition-all shrink-0"
+                        aria-label={`اتصال ${num}`}
+                        title={digitsOnly(num) || num}
+                        className="w-10 h-10 rounded-full bg-white border border-black/10 text-slate-700 hover:text-green-600 hover:border-green-500/30 hover:shadow-md transition-all flex items-center justify-center shrink-0"
                       >
-                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-3 h-3 shrink-0 opacity-60" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                         </svg>
-                        <span className="text-[11px] font-black tabular-nums tracking-tight text-slate-800">{digitsOnly(num) || num}</span>
                       </a>
                     ))}
                   </div>
@@ -2345,11 +2345,8 @@ export default function App() {
 
           {/* DEALS */}
           {discountItems.length > 0 && (
-            <section className="py-6 overflow-hidden deals-strip relative">
+            <section className="pt-2 pb-0 overflow-hidden deals-strip relative">
                 <div className="deals-strip-bg pointer-events-none absolute inset-0 opacity-40" style={{ background: `linear-gradient(90deg, transparent, ${settings.primaryColor}33, transparent)` }} />
-                <div className="px-6 flex items-center justify-center mb-6 relative z-10" dir="rtl">
-                   <h2 className="deals-title-glow text-[22px] font-black uppercase italic inline-block" style={{ color: settings.primaryColor }}>{settings.dealsSectionTitle || "عروض نارية 🔥"}</h2>
-                </div>
                 <div className="flex gap-4 px-6 overflow-x-auto no-scrollbar pb-8 snap-x relative z-10">
                   {discountItems.map((item, di) => (
                     <div
