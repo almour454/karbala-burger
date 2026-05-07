@@ -2231,7 +2231,7 @@ export default function App() {
           </button>
 
           {/* CUSTOMER HEADER */}
-          <header ref={heroParticleRef} className="pt-10 pb-8 px-6 text-center relative overflow-hidden">
+          <header ref={heroParticleRef} className="pt-5 pb-4 sm:pt-10 sm:pb-8 px-6 text-center relative overflow-hidden">
 
             {/* ── A: BREATHING BACKGROUND GLOW ── */}
             <div className="hero-breath-bg pointer-events-none absolute inset-0"
@@ -2241,8 +2241,8 @@ export default function App() {
             <div className="hero-enter-0" style={{ position: 'relative', zIndex: 1 }}>
               {/* ── B: FLOATING LOGO — clean atmospheric glow, no box ── */}
               {settings.logoUrl ? (
-                <div className="flex justify-center mb-6">
-                  <div className="relative" style={{ width: 128, height: 128 }}>
+                <div className="flex justify-center mb-3 sm:mb-6">
+                  <div className="relative" style={{ width: 96, height: 96 }}>
                     {/* atmospheric radial glow — no hard edges, perfectly centered */}
                     <div className="logo-ring-pulse absolute rounded-full pointer-events-none"
                       style={{
@@ -2280,14 +2280,14 @@ export default function App() {
             {/* ── D: STAGGERED ENTRANCE — TITLE ── */}
             <div className="hero-enter-1 hero-collision-target" style={{ position: 'relative', zIndex: 1 }}>
               {/* ── C: SHIMMER TITLE ── */}
-              <h1 className="hero-title-shimmer text-5xl sm:text-6xl font-black italic uppercase tracking-tighter leading-tight text-slate-950 relative inline-block overflow-hidden">
+              <h1 className="hero-title-shimmer text-4xl sm:text-6xl font-black italic uppercase tracking-tighter leading-tight text-slate-950 relative inline-block overflow-hidden">
                 {settings.restaurantName}
               </h1>
-              <h2 className="text-3xl sm:text-4xl font-black text-slate-800/40 mt-1">{settings.restaurantNameAr}</h2>
+              <h2 className="text-lg sm:text-4xl font-black text-slate-800/40 mt-0.5 leading-tight">{settings.restaurantNameAr}</h2>
             </div>
 
             {/* ── D: STAGGERED ENTRANCE — BADGE + LOCATION ── */}
-            <div className="mt-8 flex flex-col items-center gap-3 hero-enter-2 hero-collision-target" style={{ position: 'relative', zIndex: 1 }}>
+            <div className="mt-4 sm:mt-8 flex flex-col items-center gap-2 sm:gap-3 hero-enter-2 hero-collision-target" style={{ position: 'relative', zIndex: 1 }}>
               <div className="flex items-center gap-3 bg-black text-white px-6 py-2.5 rounded-full shadow-2xl">
                 <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
                 <span className="text-[11px] font-black uppercase tracking-widest">{settings.openingHours}</span>
