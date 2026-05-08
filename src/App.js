@@ -549,7 +549,7 @@ export default function App() {
     if (!ownerEmail.trim() || !ownerPassword) return;
     setAuthError("");
     // ── Demo shortcut: bypass Firebase for trial login ──
-    if (ownerEmail.trim() === DEMO_LOGIN_EMAIL && ownerPassword === DEMO_LOGIN_PASSWORD) {
+    if (ownerEmail.trim().toLowerCase() === DEMO_LOGIN_EMAIL && ownerPassword === DEMO_LOGIN_PASSWORD) {
       handleDemoLogin();
       setOwnerPassword("");
       return;
