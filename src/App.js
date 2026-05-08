@@ -134,13 +134,6 @@ const BUNDLE = "premium";
 const LOCKED = false;
 // ============================================================
 
-// ============================================================
-// 🎭 DEMO CREDENTIALS — hardcoded trial login
-//    Gives full edit access but auto-resets every 10 minutes
-const DEMO_LOGIN_EMAIL    = "demo@synapse.dev";
-const DEMO_LOGIN_PASSWORD = "demo1234";
-// ============================================================
-
 // Shorthand used throughout the code — don't touch this line
 const FEATURES = {
   dashboard:    BUNDLE === "premium",
@@ -548,14 +541,23 @@ export default function App() {
     e.preventDefault();
     if (!ownerEmail.trim() || !ownerPassword) return;
     setAuthError("");
-    // ── Demo shortcut: bypass Firebase for trial login ──
-    if (ownerEmail.trim().toLowerCase() === DEMO_LOGIN_EMAIL && ownerPassword === DEMO_LOGIN_PASSWORD) {
-      handleDemoLogin();
-      setOwnerPassword("");
-      return;
-    }
     try {
       const cred = await signInWithEmailAndPassword(auth, ownerEmail.trim(), ownerPassword);
+
+      // ── Demo account: trigger demo mode instead of real owner access ──
+      if (cred.user.email?.toLowerCase() === "demo@demo.com") {
+        isDemoModeRef.current = true;
+        setIsDemoMode(true);
+        setSettings({ ...DEMO_SEED_SETTINGS });
+        setMenuItems([...DEMO_SEED_ITEMS]);
+        setCategories([...DEMO_SEED_CATEGORIES]);
+        setSettingsLoaded(true);
+        setIsUnlocked(true);
+        setAdminTab('orders');
+        setOwnerPassword("");
+        navigateTo('owner');
+        return;
+      }
       const ownerRef = getOwnerDoc();
       const ownerSnap = await getDoc(ownerRef);
       if (!ownerSnap.exists()) {
@@ -665,14 +667,14 @@ export default function App() {
     navigateTo('customer');
   };
 
-  // ── DEMO AUTO-RESET: revert all changes every 10 minutes ──
+  // ── DEMO AUTO-RESET every 10 minutes ──
   useEffect(() => {
     if (!isDemoMode) return;
     const interval = setInterval(() => {
       setSettings({ ...DEMO_SEED_SETTINGS });
       setMenuItems([...DEMO_SEED_ITEMS]);
       setCategories([...DEMO_SEED_CATEGORIES]);
-    }, 10 * 60 * 1000); // 10 minutes
+    }, 10 * 60 * 1000);
     return () => clearInterval(interval);
   }, [isDemoMode]);
 
