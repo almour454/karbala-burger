@@ -279,6 +279,11 @@ export default function App() {
         setIsUnlocked(false);
         return;
       }
+      // ── Demo user always gets admin access ──
+      if (user.email?.toLowerCase() === "demo@demo.com") {
+        setIsUnlocked(true);
+        return;
+      }
       try {
         const ownerSnap = await getDoc(getOwnerDoc());
         setIsUnlocked(ownerSnap.exists() && ownerSnap.data().uid === user.uid);
@@ -544,17 +549,11 @@ export default function App() {
     try {
       const cred = await signInWithEmailAndPassword(auth, ownerEmail.trim(), ownerPassword);
 
-      // ── Demo account: trigger demo mode instead of real owner access ──
+      // ── Demo account: real admin panel access + auto-reset every 10 min ──
       if (cred.user.email?.toLowerCase() === "demo@demo.com") {
-        isDemoModeRef.current = true;
-        setIsDemoMode(true);
-        setSettings({ ...DEMO_SEED_SETTINGS });
-        setMenuItems([...DEMO_SEED_ITEMS]);
-        setCategories([...DEMO_SEED_CATEGORIES]);
-        setSettingsLoaded(true);
         setIsUnlocked(true);
-        setAdminTab('orders');
         setOwnerPassword("");
+        setAdminTab('orders');
         navigateTo('owner');
         return;
       }
@@ -667,16 +666,22 @@ export default function App() {
     navigateTo('customer');
   };
 
-  // ── DEMO AUTO-RESET every 10 minutes ──
+  // ── AUTO-RESET for demo@demo.com every 10 minutes ──
   useEffect(() => {
-    if (!isDemoMode) return;
-    const interval = setInterval(() => {
-      setSettings({ ...DEMO_SEED_SETTINGS });
-      setMenuItems([...DEMO_SEED_ITEMS]);
-      setCategories([...DEMO_SEED_CATEGORIES]);
+    if (!user || !isUnlocked) return;
+    if (user.email?.toLowerCase() !== "demo@demo.com") return;
+    const interval = setInterval(async () => {
+      try {
+        // Reset settings to seed data
+        await setDoc(getSettingsDoc(), { ...DEMO_SEED_SETTINGS, categories: DEMO_SEED_CATEGORIES }, { merge: false });
+        // Reset menu items
+        for (const item of DEMO_SEED_ITEMS) {
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', item.id), item);
+        }
+      } catch (e) { console.error("Demo reset failed", e); }
     }, 10 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [isDemoMode]);
+  }, [user, isUnlocked]);
 
   // ── SEED REAL FIREBASE MENU ──
   const handleSeedRealMenu = async () => {
